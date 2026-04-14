@@ -1,152 +1,205 @@
-const express = require("express");
-const { collections } = require("../../config/firebase");
-const {
-  requireAuth,
-  requireProjectAdmin,
-  requireFeature,
-} = require("../../middleware/auth");
-const logger = require("../../utils/logger");
-
+const express = require('express');
 const router = express.Router();
+const { generateText } = require('../../utils/openai');
+const { collections } = require('../../config/firebase');
+const { requireAuth, requireProjectAdmin } = require('../../middleware/auth');
+const logger = require('../../utils/logger');
+const axios = require('axios');
 
-// Generate report for current project
-router.get(
-  "/generate",
-  requireAuth,
-  requireProjectAdmin,
-  requireFeature("reportGeneration"),
-  async (req, res) => {
+// OpenAI generate — drop-in replacement for Gemini's generateContent
+async function generate(prompt) {
+  return generateText(prompt, 0.4);
+}
+
+
+// ── Fetch Jira issues for date range ─────────────────────────────────────────
+async function fetchJiraIssues(token, cloudId, projectKey, from, to) {
+  try {
+    const jql = `project = "${projectKey}" AND created >= "${from}" AND created <= "${to}" ORDER BY created DESC`;
+    const r = await axios.get(
+      `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search/jql`,
+      {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        params: { jql, maxResults: 200, fields: 'summary,status,assignee,issuetype,priority,created,resolutiondate,description' },
+      }
+    );
+    return r.data.issues || [];
+  } catch (e) {
+    logger.warn('[REPORT] Jira fetch failed:', e.message);
+    return [];
+  }
+}
+
+// ── POST /api/features/reports/generate ──────────────────────────────────────
+router.post('/generate', requireAuth, requireProjectAdmin, async (req, res) => {
+  try {
+    const { token, cloudId, projectKey } = req.session;
+    const { reportType, from, to, editNotes } = req.body;
+
+    // ── Validation ──
+    if (!reportType) return res.status(400).json({ error: 'reportType is required' });
+    if (!from || !to) return res.status(400).json({ error: 'from and to dates are required' });
+
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (isNaN(fromDate.getTime())) return res.status(400).json({ error: 'Invalid from date' });
+    if (isNaN(toDate.getTime())) return res.status(400).json({ error: 'Invalid to date' });
+    if (toDate > today) return res.status(400).json({ error: 'End date cannot be in the future' });
+    if (fromDate > toDate) return res.status(400).json({ error: 'Start date must be before end date' });
+
+    const diffDays = (toDate - fromDate) / (1000 * 60 * 60 * 24);
+    if (diffDays > 365) return res.status(400).json({ error: 'Date range cannot exceed 1 year' });
+
+    const validTypes = ['team-performance', 'sprint-summary', 'bug-analysis'];
+    if (!validTypes.includes(reportType)) return res.status(400).json({ error: `Invalid report type. Must be one of: ${validTypes.join(', ')}` });
+
+    // ── Fetch data ──
+    const issues = await fetchJiraIssues(token, cloudId, projectKey, from, to);
+
+    // ── Firebase executions ──
+    let executions = [];
     try {
-      const { projectKey } = req.session;
-      const { period = "6months", format = "json" } = req.query;
-
-      // Validate period
-      const validPeriods = ["1month", "3months", "6months", "1year"];
-      if (!validPeriods.includes(period)) {
-        return res
-          .status(400)
-          .json({ error: `Period must be one of: ${validPeriods.join(", ")}` });
-      }
-
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-
-      switch (period) {
-        case "1month":
-          startDate.setMonth(startDate.getMonth() - 1);
-          break;
-        case "3months":
-          startDate.setMonth(startDate.getMonth() - 3);
-          break;
-        case "6months":
-          startDate.setMonth(startDate.getMonth() - 6);
-          break;
-        case "1year":
-          startDate.setFullYear(startDate.getFullYear() - 1);
-          break;
-      }
-
-      // Fetch execution logs for this project in date range
-      const executionsSnapshot = await collections.executions
-        .where("projectId", "==", projectKey)
-        .where("triggeredAt", ">=", startDate)
-        .where("triggeredAt", "<=", endDate)
+      const snap = await collections.executions
+        .where('projectId', '==', projectKey)
+        .where('startedAt', '>=', fromDate)
+        .where('startedAt', '<=', toDate)
         .get();
+      executions = snap.docs.map(d => d.data());
+    } catch (e) { logger.warn('[REPORT] Executions fetch failed:', e.message); }
 
-      const executions = executionsSnapshot.docs.map((d) => d.data());
+    // ── Firebase issues history ──
+    let issueHistory = [];
+    try {
+      const snap = await collections.issues
+        .where('projectKey', '==', projectKey)
+        .get();
+      issueHistory = snap.docs.map(d => d.data());
+    } catch (e) { logger.warn('[REPORT] Issue history fetch failed:', e.message); }
 
-      // Aggregate metrics
-      const report = {
-        period: { start: startDate, end: endDate },
-        project: projectKey,
-        generatedAt: new Date(),
-        summary: {
-          totalExecutions: executions.length,
-          successfulExecutions: executions.filter(
-            (e) => e.status === "completed",
-          ).length,
-          failedExecutions: executions.filter((e) => e.status === "failed")
-            .length,
-          avgExecutionTime: calculateAvgExecutionTime(executions),
-        },
-        bugMetrics: {
-          byPriority: aggregateByField(executions, "issue.priority"),
-          byType: aggregateByField(executions, "issue.type"),
-          resolutionTime: calculateResolutionMetrics(executions),
-        },
-        teamMetrics: {
-          assignmentsByUser: aggregateAssignments(executions),
-          performance: calculateTeamPerformance(executions),
-        },
-      };
+    // ── Build data summary for Gemini ──
+    const totalIssues = issues.length;
+    const byStatus = {};
+    const byPriority = {};
+    const byType = {};
+    const byAssignee = {};
+    let resolved = 0;
 
-      // Format response
-      if (format === "csv") {
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="report-${projectKey}-${period}.csv"`,
-        );
-        res.send(convertToCSV(report));
-      } else {
-        res.json({ success: true, data: report });
-      }
-    } catch (error) {
-      logger.error("Report generation failed:", error);
-      res
-        .status(500)
-        .json({ success: false, error: "Failed to generate report" });
-    }
-  },
-);
+    issues.forEach(i => {
+      const status = i.fields?.status?.name || 'Unknown';
+      const priority = i.fields?.priority?.name || 'Unknown';
+      const type = i.fields?.issuetype?.name || 'Unknown';
+      const assignee = i.fields?.assignee?.displayName || 'Unassigned';
 
-// Helper: Calculate average execution time in seconds
-function calculateAvgExecutionTime(executions) {
-  const completed = executions.filter((e) => e.completedAt && e.triggeredAt);
-  if (!completed.length) return null;
+      byStatus[status] = (byStatus[status] || 0) + 1;
+      byPriority[priority] = (byPriority[priority] || 0) + 1;
+      byType[type] = (byType[type] || 0) + 1;
+      byAssignee[assignee] = (byAssignee[assignee] || 0) + 1;
+      if (i.fields?.resolutiondate) resolved++;
+    });
 
-  const totalMs = completed.reduce((sum, e) => {
-    return sum + (new Date(e.completedAt) - new Date(e.triggeredAt));
-  }, 0);
+    const resolutionRate = totalIssues > 0 ? Math.round((resolved / totalIssues) * 100) : 0;
 
-  return Math.round(totalMs / completed.length / 1000);
-}
+    const dataSummary = {
+      projectKey,
+      period: { from, to, days: Math.round(diffDays) },
+      totalIssues,
+      resolved,
+      resolutionRate: `${resolutionRate}%`,
+      byStatus,
+      byPriority,
+      byType,
+      byAssignee,
+      workflowExecutions: executions.length,
+      historicalIssues: issueHistory.length,
+    };
 
-// Helper: Aggregate by nested field path
-function aggregateByField(executions, fieldPath) {
-  const counts = {};
+    // ── Build Gemini prompt per report type ──
+    const reportTypeLabels = {
+      'team-performance': 'Team Performance Report',
+      'sprint-summary': 'Sprint Summary Report',
+      'bug-analysis': 'Bug Analysis Report',
+    };
 
-  executions.forEach((exec) => {
-    const value = getFieldByPath(exec.context, fieldPath);
-    if (value) {
-      counts[value] = (counts[value] || 0) + 1;
-    }
-  });
+    const typeSpecificInstructions = {
+      'team-performance': `Focus on: individual team member workload, assignment distribution, who is overloaded vs underutilized, productivity trends, recommendations for better task distribution.`,
+      'sprint-summary': `Focus on: overall sprint health, completion rate, velocity, blockers, what went well, what needs improvement, key achievements, risks for next sprint.`,
+      'bug-analysis': `Focus on: bug frequency by priority/type, resolution time trends, recurring patterns, most affected areas, root cause analysis, prevention recommendations.`,
+    };
 
-  return Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .reduce((obj, [k, v]) => ({ ...obj, [k]: v }), {});
-}
+    const prompt = `You are a professional project manager generating a formal ${reportTypeLabels[reportType]} for project "${projectKey}".
 
-// Helper: Get nested field value by dot-path
-function getFieldByPath(obj, path) {
-  return path.split(".").reduce((o, k) => o?.[k], obj);
-}
+## Data Summary (${from} to ${to}):
+${JSON.stringify(dataSummary, null, 2)}
 
-// Placeholder aggregation functions
-function calculateResolutionMetrics(executions) {
-  return { avgHours: null };
-}
-function aggregateAssignments(executions) {
-  return {};
-}
-function calculateTeamPerformance(executions) {
-  return {};
-}
-function convertToCSV(report) {
-  return JSON.stringify(report);
-}
+## Report Type Instructions:
+${typeSpecificInstructions[reportType]}
+
+${editNotes ? `## Additional Notes from Admin:\n${editNotes}\n` : ''}
+
+Generate a comprehensive, professional report in HTML format. Requirements:
+- Use professional language suitable for stakeholders
+- Include an executive summary at the top
+- Use tables for data presentation where appropriate
+- Include specific numbers and percentages from the data
+- Provide actionable recommendations
+- Use proper HTML with inline styles (no external CSS)
+- Color scheme: white background, #1e40af for headings, #374151 for body text
+- Make it print-friendly
+- Include a footer with generation date and project name
+
+Return ONLY the HTML content (starting with <div), no markdown, no code blocks.`;
+
+    const reportHtml = await generate(prompt);
+
+    // ── Save to Firebase ──
+    const reportDoc = {
+      projectId: projectKey,
+      reportType,
+      period: { from, to },
+      generatedAt: new Date(),
+      generatedBy: req.session.user?.displayName || 'Admin',
+      dataSummary,
+      editNotes: editNotes || null,
+    };
+
+    let reportId = null;
+    try {
+      const ref = await collections.reports.add(reportDoc);
+      reportId = ref.id;
+    } catch (e) { logger.warn('[REPORT] Save to Firebase failed:', e.message); }
+
+    res.json({
+      success: true,
+      reportId,
+      reportType,
+      period: { from, to },
+      dataSummary,
+      html: reportHtml,
+    });
+
+  } catch (e) {
+    logger.error('[REPORT] Generation failed:', e.message);
+    res.status(500).json({ error: e.message || 'Report generation failed' });
+  }
+});
+
+// ── GET /api/features/reports/history ────────────────────────────────────────
+router.get('/history', requireAuth, requireProjectAdmin, async (req, res) => {
+  try {
+    const { projectKey } = req.session;
+    const snap = await collections.reports
+      .where('projectId', '==', projectKey)
+      .orderBy('generatedAt', 'desc')
+      .limit(20)
+      .get();
+    const reports = snap.docs.map(d => ({ id: d.id, ...d.data(), html: undefined }));
+    res.json({ success: true, reports });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 module.exports = router;

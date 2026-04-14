@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Not Registered | Agentic Workflow</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    .float-anim { animation: float 3s ease-in-out infinite; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    .fade-up { animation: fadeUp 0.6s ease; }
+    .fade-up-d1 { animation: fadeUp 0.6s ease 0.1s both; }
+    .fade-up-d2 { animation: fadeUp 0.6s ease 0.2s both; }
+    .fade-up-d3 { animation: fadeUp 0.6s ease 0.3s both; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen flex items-center justify-center p-4">
+
+  <div class="max-w-2xl w-full">
+    <!-- Main Card -->
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden fade-up">
+      <!-- Header gradient -->
+      <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 px-8 py-10 text-center">
+        <div class="float-anim inline-block text-5xl mb-4">🚀</div>
+        <h1 class="text-2xl font-extrabold text-white">Agentic Workflow</h1>
+        <p class="text-blue-100 mt-2 text-sm">AI-Powered Jira Automation Platform</p>
+      </div>
+
+      <div class="p-8">
+        <!-- Alert -->
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 fade-up-d1">
+          <div class="flex items-start gap-3">
+            <span class="text-amber-500 text-xl">⚠️</span>
+            <div>
+              <h2 class="font-semibold text-amber-900">Project Not Yet Registered</h2>
+              <p class="text-sm text-amber-700 mt-1">
+                Your Jira project hasn't been set up with Agentic Workflow yet.
+                <strong>Ask your project administrator</strong> to register it first.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- What is Agentic Workflow -->
+        <div class="mb-8 fade-up-d2">
+          <h3 class="font-bold text-gray-900 text-lg mb-4">What is Agentic Workflow?</h3>
+          <p class="text-gray-600 text-sm leading-relaxed mb-4">
+            Agentic Workflow is an intelligent automation layer for Jira that supercharges your team's productivity.
+            Once your project admin registers your project, you'll get access to all these features:
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="p-4 bg-blue-50 rounded-xl border border-blue-100">
+              <div class="text-2xl mb-2">🔔</div>
+              <h4 class="font-semibold text-blue-900 text-sm">Smart Notifications</h4>
+              <p class="text-xs text-blue-700 mt-1">Get notified via Slack DM, email, or SMS when issues are created, assigned, or updated — with priority-based routing.</p>
+            </div>
+            <div class="p-4 bg-purple-50 rounded-xl border border-purple-100">
+              <div class="text-2xl mb-2">🤖</div>
+              <h4 class="font-semibold text-purple-900 text-sm">AI Assignee Suggestions</h4>
+              <p class="text-xs text-purple-700 mt-1">AI analyzes your team's skills and workload to suggest the best person for each task.</p>
+            </div>
+            <div class="p-4 bg-green-50 rounded-xl border border-green-100">
+              <div class="text-2xl mb-2">💡</div>
+              <h4 class="font-semibold text-green-900 text-sm">AI Solution Hints</h4>
+              <p class="text-xs text-green-700 mt-1">Automated bug analysis and fix suggestions delivered right to the assignee's notification.</p>
+            </div>
+            <div class="p-4 bg-orange-50 rounded-xl border border-orange-100">
+              <div class="text-2xl mb-2">📊</div>
+              <h4 class="font-semibold text-orange-900 text-sm">Reports & Analytics</h4>
+              <p class="text-xs text-orange-700 mt-1">Generate performance reports, sprint summaries, and bug analysis dashboards.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- What admin needs to do -->
+        <div class="bg-gray-50 rounded-xl border border-gray-200 p-5 mb-6 fade-up-d3">
+          <h4 class="font-semibold text-gray-900 text-sm mb-3">📋 Tell Your Admin To:</h4>
+          <ol class="list-decimal list-inside text-sm text-gray-600 space-y-2">
+            <li>Log in to <strong>Agentic Workflow</strong> with their Jira admin account</li>
+            <li>Select this project from the project list</li>
+            <li>Configure feature preferences and create workflows</li>
+            <li>Once set up, you'll be able to log in and provide your notification preferences</li>
+          </ol>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a href="/login" class="flex-1 text-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-3 px-4 rounded-xl font-semibold transition shadow-lg hover:shadow-xl text-sm">
+            Try Another Project
+          </a>
+          <a href="/login" class="flex-1 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-4 rounded-xl font-medium transition text-sm">
+            Switch Account
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-400 text-center mt-6">
+      Agentic Workflow v1.0 · AI-Powered Jira Automation
+    </p>
+  </div>
+</body>
+</html>

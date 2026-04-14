@@ -10,6 +10,7 @@ const {
   extractAssigneeEmail,
 } = require("../../config/jira");
 const { executeWorkflow } = require("../../services/workflowEngine");
+const { runWorkflowForEvent } = require("../../services/workflowExecutor");
 const logger = require("../../utils/logger");
 
 const router = express.Router();
@@ -73,16 +74,15 @@ router.post(
         return;
       }
 
-      // Execute each matching workflow (fire-and-forget with error logging)
+      // Execute using new workflow executor (feature-gated)
       const executionPromises = workflows.map((workflow) =>
-        executeWorkflow(workflow, context)
+        runWorkflowForEvent(context.issue.projectKey, ourEvent, context.issue)
           .then((result) => {
-            logger.info(`Workflow ${workflow.id} executed: ${result.status}`);
+            logger.info(`Workflow executed: ${result.workflowName || workflow.id}`);
             return result;
           })
           .catch((error) => {
             logger.error(`Workflow ${workflow.id} failed:`, error.message);
-            // Could trigger alerting here
             return { status: "failed", error: error.message };
           }),
       );

@@ -12,21 +12,28 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
-// Verify user is admin of the specific Jira project
+// Verify user is admin of the specific Jira project.
+// Uses the session's isAdmin flag (set during /validate) instead of calling
+// Jira API every time — this avoids failures due to token expiry and speeds
+// up every mutating API call significantly.
 const requireProjectAdmin = async (req, res, next) => {
   try {
-    const { token, cloudId } = req.session;
     const projectKey =
-      req.body?.projectKey || req.params?.projectKey || req.query?.projectKey;
+      req.headers["x-project-key"] ||
+      req.body?.projectKey ||
+      req.params?.projectKey ||
+      req.query?.projectKey ||
+      req.session?.projectKey;
 
     if (!projectKey) {
       return res.status(400).json({ error: "Project key required" });
     }
 
-    const jiraClient = createJiraClient(token);
-    const isAdmin = await checkProjectAdmin(jiraClient, cloudId, projectKey);
+    // Store in session for subsequent calls
+    req.session.projectKey = projectKey;
 
-    if (!isAdmin) {
+    // ✅ Trust session isAdmin flag (set during /validate with live Jira check)
+    if (!req.session?.isAdmin) {
       logger.warn(
         `User ${req.session.user?.email} attempted admin action on ${projectKey} without permission`,
       );
@@ -34,7 +41,7 @@ const requireProjectAdmin = async (req, res, next) => {
     }
 
     // Attach project context to request
-    req.project = { key: projectKey, cloudId };
+    req.project = { key: projectKey, cloudId: req.session.cloudId };
     next();
   } catch (error) {
     logger.error("Admin verification failed:", error.message);

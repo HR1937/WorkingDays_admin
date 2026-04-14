@@ -1,17 +1,25 @@
 const express = require("express");
-const axios = require("axios");
-// ADD THIS LINE at the top with your other requires:
-const { requireAuth } = require("../middleware/auth");
+const axios = require("axios"); // ✅ Needed for direct API calls
 const { v4: uuidv4 } = require("uuid");
-const { collections, getUserRef } = require("../config/firebase");
+const admin = require("firebase-admin"); // ✅ Needed for serverTimestamp()
+const {
+  collections,
+  getUserRef,
+  registerProject,
+  upsertProjectMember,
+  isProjectRegistered,
+  getRequiredContactInfo,
+  getProjectMemberRef,
+} = require("../config/firebase");
 const {
   JIRA_AUTH,
-  JIRA_API,
+  JIRA_API, // ✅ This is just a constant, we override with direct URL below
   createJiraClient,
   getAccessibleResources,
   getCurrentUser,
   checkProjectAdmin,
 } = require("../config/jira");
+const { requireAuth } = require("../middleware/auth"); // ✅ Needed for /profile-setup
 const logger = require("../utils/logger");
 
 const router = express.Router();
@@ -19,7 +27,7 @@ const router = express.Router();
 // Home - redirect to login or dashboard
 router.get("/", (req, res) => {
   if (req.session?.token && req.session?.isAdmin) {
-    return res.redirect("/workflow-builder");
+    return res.redirect("/dashboard");
   }
   res.redirect("/login");
 });
@@ -334,91 +342,181 @@ router.get("/projects", async (req, res) => {
 
 // Validate project and check permissions
 // ================= VALIDATE =================
+// ================= VALIDATE =================
+// 🔍 DEBUG: Log session before validate
+router.use("/validate", (req, res, next) => {
+  logger.debug("🔍 /validate request:", {
+    body: req.body,
+    session: {
+      hasToken: !!req.session?.token,
+      cloudId: req.session?.cloudId,
+      user: req.session?.user?.displayName,
+      baseUrl: req.session?.baseUrl,
+    },
+  });
+  next();
+});
 router.post("/validate", async (req, res) => {
   try {
     const { token, cloudId, user } = req.session;
     const { projectKey } = req.body;
 
     if (!token || !cloudId || !projectKey) {
+      logger.error("Missing params:", { token: !!token, cloudId, projectKey });
       return res.status(400).send("Missing required parameters");
     }
 
-    const jiraClient = createJiraClient(token);
+    // ✅ USE DIRECT AXIOS CALLS (like your working oauth-test.js)
+    const JIRA_API = "https://api.atlassian.com";
+    const authHeaders = { Authorization: `Bearer ${token}` };
 
-    // ✅ CHECK: Is user admin? (for workflow CRUD permissions)
+    // ===== USER INFO =====
+    let userRes;
+    try {
+      userRes = await axios.get(
+        `${JIRA_API}/ex/jira/${cloudId}/rest/api/3/myself`,
+        { headers: authHeaders },
+      );
+    } catch (e) {
+      logger.error("Failed to fetch user:", e.response?.data || e.message);
+      return res.status(500).send("Failed to fetch user info");
+    }
+    const userData = userRes.data;
+
+    // ===== ADMIN CHECK (EXACTLY LIKE YOUR WORKING CODE) =====
     let isAdmin = false;
     try {
-      const adminRes = await jiraClient.get(
-        `/ex/jira/${cloudId}/rest/api/3/mypermissions`,
+      const adminRes = await axios.get(
+        `${JIRA_API}/ex/jira/${cloudId}/rest/api/3/mypermissions`,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
           params: {
             permissions: "ADMINISTER_PROJECTS",
             projectKey: projectKey,
           },
         },
       );
+      // ✅ EXACT RESPONSE PARSING LIKE YOUR WORKING CODE
       isAdmin =
         adminRes.data.permissions.ADMINISTER_PROJECTS?.havePermission || false;
+      logger.debug("Admin check result:", { projectKey, isAdmin });
     } catch (e) {
-      logger.debug("Admin check failed (non-admin user):", e.message);
-      isAdmin = false; // ✅ Non-admins can still use the app (view-only)
+      logger.warn(
+        "Admin permission check failed:",
+        e.response?.data || e.message,
+      );
+      isAdmin = false; // Non-admins can still use app (view-only)
     }
 
-    // ✅ CHECK: Can user assign issues? (for receiving notifications)
+    // ===== ASSIGN CHECK (EXACTLY LIKE YOUR WORKING CODE) =====
     let canAssign = false;
     try {
-      const permRes = await jiraClient.get(
-        `/ex/jira/${cloudId}/rest/api/3/mypermissions`,
+      const issueKey = `${projectKey}-1`; // Test with first issue
+      const permRes = await axios.get(
+        `${JIRA_API}/ex/jira/${cloudId}/rest/api/3/mypermissions`,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: authHeaders,
           params: {
             permissions: "ASSIGN_ISSUES",
-            issueKey: `${projectKey}-1`, // Test with first issue
+            issueKey: issueKey,
           },
         },
       );
       canAssign =
         permRes.data.permissions.ASSIGN_ISSUES?.havePermission || false;
+      logger.debug("Assign check result:", { issueKey, canAssign });
     } catch (e) {
-      logger.debug("Assign check failed:", e.message);
+      logger.warn(
+        "Assign permission check failed:",
+        e.response?.data || e.message,
+      );
       canAssign = false;
     }
 
-    // ✅ SAVE USER TO FIRESTORE (for ANY authenticated user)
+    // ✅ SAVE USER TO FIRESTORE
     await getUserRef(req.session.userId).set(
       {
-        jiraAccountId: user.accountId,
-        email: user.emailAddress,
-        displayName: user.displayName,
+        jiraAccountId: userData.accountId,
+        email: userData.emailAddress,
+        displayName: userData.displayName,
         jiraCloudId: cloudId,
         jiraProjectKey: projectKey,
-        jiraBaseUrl: selected.url, // from earlier in flow
-        isAdmin: isAdmin, // ✅ Store role for permission checks
+        jiraBaseUrl: req.session.baseUrl,
+        isAdmin: isAdmin,
         canAssign: canAssign,
         lastLogin: admin.firestore.FieldValue.serverTimestamp(),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       },
-      { merge: true }, // ✅ Update existing, don't overwrite
+      { merge: true },
     );
 
-    // ✅ UPDATE SESSION (for ANY user, not just admins)
-    req.session.projectKey = projectKey;
-    req.session.isAdmin = isAdmin; // ✅ Store for route middleware
-    req.session.canAssign = canAssign;
+    // ✅ CREATE/UPDATE PROJECT MEMBER doc (per-project, per-user)
+    await upsertProjectMember(projectKey, userData.accountId, {
+      userId: req.session.userId,
+      jiraAccountId: userData.accountId,
+      email: userData.emailAddress,
+      displayName: userData.displayName,
+      role: isAdmin ? "admin" : "member",
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-    // ✅ REDIRECT TO WORKFLOW BUILDER (for ANY authenticated user)
-    // ✅ REDIRECT based on role:
-    // - Admins: Go straight to workflow builder
-    // - Non-admins: Go to profile setup first (to collect contact info)
+    // ✅ IF ADMIN: Register the project (first admin to login registers it)
     if (isAdmin) {
-      res.redirect("/workflow-builder");
+      await registerProject(
+        projectKey,
+        req.session.userId,
+        userData.emailAddress,
+        userData.displayName,
+      );
+    }
+
+    // ✅ UPDATE SESSION (include accountId for member lookups)
+    req.session.projectKey = projectKey;
+    req.session.isAdmin = isAdmin;
+    req.session.canAssign = canAssign;
+    req.session.user.accountId = userData.accountId;
+
+    logger.info("Validation complete:", { projectKey, isAdmin, canAssign });
+
+    // ✅ REDIRECT BASED ON ROLE
+    if (isAdmin) {
+      res.redirect("/dashboard");
     } else {
-      res.redirect("/profile-setup"); // ✅ Non-admins set up contact info first
+      // Non-admin: check if project is registered by any admin
+      const registered = await isProjectRegistered(projectKey);
+      if (!registered) {
+        res.redirect("/not-registered");
+      } else {
+        // Check if this user has already completed profile setup
+        // (has at least one contact field saved in the project member doc)
+        const memberDoc = await getProjectMemberRef(projectKey, userData.accountId).get();
+        const memberData = memberDoc.exists ? memberDoc.data() : {};
+        const hasCompletedProfile = !!(
+          memberData.slackUserId ||
+          memberData.phoneNumber ||
+          memberData.contact?.githubUsername
+        );
+
+        if (hasCompletedProfile) {
+          // Already set up — go straight to BugSense
+          res.redirect(`/bugsense?project=${encodeURIComponent(projectKey)}`);
+        } else {
+          res.redirect("/profile-setup");
+        }
+      }
     }
   } catch (error) {
-    logger.error("Project validation failed:", error.message);
-    res.status(500).send("Failed to validate project access");
+    logger.error("❌ VALIDATE HANDLER CRASHED:", {
+      message: error.message,
+      stack: error.stack,
+      session: {
+        hasToken: !!req.session?.token,
+        cloudId: req.session?.cloudId,
+        projectKey: req.session?.projectKey,
+        userId: req.session?.userId,
+      },
+    });
+    res.status(500).send(`Failed to validate project access: ${error.message}`);
   }
 });
 

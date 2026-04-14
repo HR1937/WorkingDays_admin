@@ -3,1199 +3,1292 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>
-      Agentic Workflow Builder | Project: <span id="projectKey">KAN</span>
-    </title>
+    <title>Agentic Workflow Builder</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/axios.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
-      .stage {
-        display: none;
-      }
-      .stage.active {
-        display: block;
-        animation: fadeIn 0.3s ease;
-      }
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-      .priority-checkbox:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .default-priority:checked + label {
-        font-weight: 600;
-        color: #2563eb;
-      }
-      .channel-input:invalid {
-        border-color: #dc2626;
-      }
+      body { font-family: 'Inter', system-ui, sans-serif; }
+      .stage { display: none; }
+      .stage.active { display: block; animation: fadeIn 0.3s ease; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 50; display: flex; align-items: center; justify-content: center; }
+      .modal-overlay.hidden { display: none; }
+      .event-locked { pointer-events: none; opacity: 0.55; }
+      .event-locked-banner { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #92400e; display: flex; align-items: center; gap: 6px; cursor: pointer; pointer-events: auto; }
+      .event-locked-banner:hover { background: #fde68a; }
+      .prio-sub { transition: opacity 0.15s; }
+      .prio-sub.dimmed { opacity: 0.4; pointer-events: none; }
     </style>
   </head>
   <body class="bg-gray-50 min-h-screen">
     <!-- Header -->
     <header class="bg-white shadow-sm border-b">
-      <div
-        class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center"
-      >
+      <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
         <div>
-          <h1 class="text-xl font-bold text-gray-900">
-            Agentic Workflow Builder
-          </h1>
+          <h1 class="text-xl font-bold text-gray-900">Agentic Workflow Builder</h1>
           <p class="text-sm text-gray-500">
-            Project: <span id="headerProjectKey">KAN</span> • Admin:
-            <span id="adminName">Loading...</span>
+            Project: <span id="headerProjectKey">...</span> &bull; Admin: <span id="adminName">Loading...</span>
           </p>
         </div>
-        <button
-          id="saveWorkflowBtn"
-          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition disabled:opacity-50"
-          disabled
-        >
+        <button id="saveWorkflowBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition disabled:opacity-50" disabled>
           Save Workflow
         </button>
       </div>
     </header>
 
     <main class="max-w-6xl mx-auto px-4 py-8">
-      <!-- Progress Indicator -->
-      <div class="mb-8">
+
+      <!-- ===== MODAL: Slack User ID ===== -->
+      <div id="slackIdModal" class="modal-overlay hidden">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+          <h3 class="text-lg font-bold text-gray-900 mb-2">🔗 Your Slack User ID Required</h3>
+          <p class="text-sm text-gray-600 mb-3">
+            This workflow sends Slack notifications, so we need your personal Slack User ID for this workspace.
+            <span class="text-xs text-gray-400 mt-1 block">Your Slack ID is workspace-specific — it may be different across projects.</span>
+          </p>
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-800">
+            <strong>How to find your Slack Member ID:</strong><br/>
+            1. Click your <strong>name</strong> in the Slack sidebar<br/>
+            2. Click <strong>More actions</strong> (⋯)<br/>
+            3. Click <strong>View full profile</strong><br/>
+            4. Click the <strong>three dots</strong> (⋯) next to "View As"<br/>
+            5. Click <strong>Copy Member ID</strong> &mdash; it starts with <code>U</code>
+          </div>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Slack Member ID</label>
+            <input type="text" id="slackIdInput" placeholder="e.g. U08ABCD1234" pattern="^U[A-Z0-9]+"
+              class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-mono" />
+            <p class="text-xs text-red-500 mt-1 hidden" id="slackIdError">Must start with "U"</p>
+          </div>
+          <div class="flex gap-3">
+            <button id="slackIdSaveBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium text-sm transition">Save &amp; Continue</button>
+            <button id="slackIdCancelBtn" class="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== MODAL: Mobile Number ===== -->
+      <div id="mobileModal" class="modal-overlay hidden">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+          <h3 class="text-lg font-bold text-gray-900 mb-2">📱 Mobile Number Required</h3>
+          <p class="text-sm text-gray-600 mb-4">
+            You've enabled SMS notifications. We need your mobile number to send you text messages when issues are assigned to you.
+          </p>
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+            <input type="tel" id="mobileInput" placeholder="+91 98765 43210"
+              class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" />
+            <p class="text-xs text-gray-400 mt-1">Use international format: +[country code][number] &mdash; stored encrypted.</p>
+          </div>
+          <div class="flex gap-3">
+            <button id="mobileSaveBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium text-sm transition">Save &amp; Continue</button>
+            <button id="mobileCancelBtn" class="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== STAGE 0: First-time Feature Setup ===== -->
+      <div id="stage0" class="stage bg-white rounded-xl shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">⚙️ Configure Project Features</h2>
+        <p class="text-gray-600 mb-6">Select which advanced features you'd like to enable for project <strong id="featureProjectKey">...</strong>. You can change these later in Settings.</p>
+        <div class="space-y-4 mb-8">
+
+          <!-- 1. AI-Powered Assignee Suggestions (CLICKABLE) -->
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition">
+            <input type="checkbox" name="feature" value="aiAssigneeSuggestions" class="mt-1 h-4 w-4 text-blue-600 rounded" checked />
+            <div class="ml-3">
+              <span class="font-medium text-gray-900">🤖 AI-Powered Assignee Suggestions</span>
+              <p class="text-sm text-gray-500">AI analyses your team's workload and skill history to suggest the best person for each issue.</p>
+            </div>
+          </label>
+
+          <!-- 2. Report Generation (CLICKABLE) -->
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition">
+            <input type="checkbox" name="feature" value="reportGeneration" class="mt-1 h-4 w-4 text-blue-600 rounded" checked />
+            <div class="ml-3">
+              <span class="font-medium text-gray-900">📊 Report Generation</span>
+              <p class="text-sm text-gray-500">Generate analytics on bug frequency, resolution times, and team performance on demand.</p>
+            </div>
+          </label>
+
+          <!-- 3. AI-Suggested Solutions (NON-CLICKABLE — auto-managed) -->
+          <div class="p-4 border rounded-lg bg-gray-50">
+            <div class="flex items-start gap-2">
+              <input type="checkbox" class="mt-1 h-4 w-4 text-blue-600 rounded opacity-50 cursor-not-allowed" disabled />
+              <div class="ml-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-gray-600">💡 AI-Suggested Solutions</span>
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 font-medium">Auto-managed</span>
+                </div>
+                <p class="text-sm text-gray-500 mt-0.5">When a bug is assigned, AI includes fix suggestions in the notification.</p>
+                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                  ℹ️ This feature activates automatically when you enable it in a workflow's <strong>Stage 3</strong> enhancements (requires the “Issue Assigned” event).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Sentry Bug Auto-Creation (CLICKABLE) -->
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition">
+            <input type="checkbox" name="feature" value="sentryEnabled" class="mt-1 h-4 w-4 text-blue-600 rounded" />
+            <div class="ml-3">
+              <span class="font-medium text-gray-900">🐛 Sentry Bug Auto-Creation</span>
+              <p class="text-sm text-gray-500">Automatically create Jira issues when Sentry detects errors. You'll complete the webhook setup in Settings.</p>
+            </div>
+          </label>
+
+        </div>
+        <div class="flex justify-end">
+          <button id="saveFeaturesBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition">Save Features &amp; Continue →</button>
+        </div>
+      </div>
+
+      <!-- Progress Bar (stages 1-3) -->
+      <div class="mb-8" id="progressBarWrapper">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm font-medium text-gray-700"
-            >Stage <span id="currentStageNum">1</span> of 3</span
-          >
-          <span class="text-sm text-gray-500" id="stageProgressText"
-            >Event Selection</span
-          >
+          <span class="text-sm font-medium text-gray-700">Stage <span id="currentStageNum">1</span> of 3</span>
+          <span class="text-sm text-gray-500" id="stageProgressText">Event Selection</span>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-2">
-          <div
-            id="progressBar"
-            class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style="width: 33.33%"
-          ></div>
+          <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 33.33%"></div>
         </div>
       </div>
 
-      <!-- Stage 1: Event Selection -->
+      <!-- ===== STAGE 1: Event Selection ===== -->
       <div id="stage1" class="stage active bg-white rounded-xl shadow p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">
-          1. Select Trigger Events
-        </h2>
-        <p class="text-gray-600 mb-6">
-          Choose which Jira events should activate this workflow.
-          <strong>Only one workflow can use each event type</strong> for your
-          project.
-        </p>
-
-        <div class="space-y-3">
-          <label
-            class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition"
-          >
-            <input
-              type="checkbox"
-              name="event"
-              value="issue_created"
-              class="mt-1 h-4 w-4 text-blue-600 rounded"
-            />
+        <h2 class="text-lg font-semibold text-gray-900 mb-1">1. Choose Trigger Events</h2>
+        <p class="text-gray-600 mb-6 text-sm">Pick what happens in Jira that should kick off this workflow. <strong>Each event can only belong to one workflow</strong> — if an event is already taken, you'll be redirected to edit that workflow instead.</p>
+        <div class="space-y-3" id="eventCheckboxes">
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition" data-event="issue_created">
+            <input type="checkbox" name="event" value="issue_created" class="mt-1 h-4 w-4 text-blue-600 rounded" />
             <div class="ml-3">
-              <span class="font-medium text-gray-900">Issue Created</span>
-              <p class="text-sm text-gray-500">
-                Triggered when any new issue (bug, task, feature) is created in
-                your project
-              </p>
+              <span class="font-medium text-gray-900">🆕 Issue Created</span>
+              <p class="text-sm text-gray-500">Fires when a new issue (bug, task, story, etc.) is created in your project.</p>
             </div>
           </label>
-
-          <label
-            class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition"
-          >
-            <input
-              type="checkbox"
-              name="event"
-              value="issue_assigned"
-              class="mt-1 h-4 w-4 text-blue-600 rounded"
-              id="issueAssignedCheckbox"
-            />
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition" data-event="issue_assigned">
+            <input type="checkbox" name="event" value="issue_assigned" class="mt-1 h-4 w-4 text-blue-600 rounded" />
             <div class="ml-3">
-              <span class="font-medium text-gray-900">Issue Assigned</span>
-              <p class="text-sm text-gray-500">
-                Triggered when an issue is assigned to a team member (enables
-                advanced assignment features)
-              </p>
+              <span class="font-medium text-gray-900">👤 Issue Assigned</span>
+              <p class="text-sm text-gray-500">Fires when an issue is assigned to a team member — great for notifying the assignee directly.</p>
             </div>
           </label>
-
-          <label
-            class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition"
-          >
-            <input
-              type="checkbox"
-              name="event"
-              value="issue_transitioned"
-              class="mt-1 h-4 w-4 text-blue-600 rounded"
-            />
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition" data-event="issue_transitioned">
+            <input type="checkbox" name="event" value="issue_transitioned" class="mt-1 h-4 w-4 text-blue-600 rounded" />
             <div class="ml-3">
-              <span class="font-medium text-gray-900"
-                >Issue Status Changed</span
-              >
-              <p class="text-sm text-gray-500">
-                Triggered when issue moves between statuses (e.g., "In Progress"
-                → "Done")
-              </p>
+              <span class="font-medium text-gray-900">🔄 Issue Status Changed</span>
+              <p class="text-sm text-gray-500">Fires when an issue moves between statuses (e.g. To Do → In Progress → Done).</p>
             </div>
           </label>
-
-          <label
-            class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition"
-          >
-            <input
-              type="checkbox"
-              name="event"
-              value="issue_commented"
-              class="mt-1 h-4 w-4 text-blue-600 rounded"
-            />
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition" data-event="issue_commented">
+            <input type="checkbox" name="event" value="issue_commented" class="mt-1 h-4 w-4 text-blue-600 rounded" />
             <div class="ml-3">
-              <span class="font-medium text-gray-900">Issue Commented</span>
-              <p class="text-sm text-gray-500">
-                Triggered when someone adds a comment to an issue
-              </p>
+              <span class="font-medium text-gray-900">💬 Comment Added</span>
+              <p class="text-sm text-gray-500">Fires when a team member adds a comment to any issue in your project.</p>
             </div>
           </label>
-
-          <label
-            class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition"
-          >
-            <input
-              type="checkbox"
-              name="event"
-              value="issue_updated"
-              class="mt-1 h-4 w-4 text-blue-600 rounded"
-            />
+          <label class="flex items-start p-4 border rounded-lg hover:border-blue-300 cursor-pointer transition" data-event="issue_updated">
+            <input type="checkbox" name="event" value="issue_updated" class="mt-1 h-4 w-4 text-blue-600 rounded" />
             <div class="ml-3">
-              <span class="font-medium text-gray-900">Issue Updated</span>
-              <p class="text-sm text-gray-500">
-                Triggered when any field (priority, description, etc.) is
-                modified
-              </p>
+              <span class="font-medium text-gray-900">✏️ Issue Updated</span>
+              <p class="text-sm text-gray-500">Fires when any field on an issue is modified (priority, labels, description, etc.).</p>
             </div>
           </label>
         </div>
-
-        <div
-          id="stage1Error"
-          class="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm hidden"
-        ></div>
-
+        <div id="stage1Error" class="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm hidden"></div>
         <div class="mt-8 flex justify-end">
-          <button
-            id="nextStage1"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition disabled:opacity-50"
-            disabled
-          >
-            Continue to Notifications →
-          </button>
+          <button id="nextStage1" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition disabled:opacity-50" disabled>Continue to Notifications →</button>
         </div>
       </div>
-      <!-- Slack Integration Banner (shown once per project) -->
-      <div
-        id="slackIntegrationBanner"
-        class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg hidden"
-      >
-        <div class="flex items-start">
-          <div class="flex-shrink-0">
-            <svg
-              class="h-5 w-5 text-blue-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <div class="ml-3 flex-1">
-            <h3 class="text-sm font-medium text-blue-800">
-              Slack Integration Required
-            </h3>
-            <p class="mt-1 text-sm text-blue-700">
-              To send notifications to Slack, first add our bot to your
-              workspace. This only needs to be done once per project.
-            </p>
-            <div class="mt-3">
-              <a
-                href="https://slack.com/oauth/v2/authorize?client_id=YOUR_CLIENT_ID&scope=chat:write,channels:read,im:write,users:read&redirect_uri=https://your-app.com/slack/oauth"
-                target="_blank"
-                class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
-              >
-                <svg
-                  class="-ml-0.5 mr-2 h-4 w-4"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z"
-                  />
-                </svg>
-                Add BugSense to Slack
-              </a>
-            </div>
-            <p class="mt-2 text-xs text-blue-600">
-              After adding, return here and confirm for each channel you want to
-              use.
-            </p>
-          </div>
-        </div>
-      </div>
-      <!-- Stage 2: Notification Configuration -->
+
+      <!-- ===== STAGE 2: Notification Configuration ===== -->
       <div id="stage2" class="stage bg-white rounded-xl shadow p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-2">
-          2. Configure Notifications
-        </h2>
-        <p class="text-gray-600 mb-6">
-          Set up how your team gets notified for each selected event.
-          <span class="font-medium text-blue-600">issue_assigned</span> has
-          special priority-based options.
-        </p>
-
-        <div id="notificationConfigs" class="space-y-6">
-          <!-- Dynamically populated based on Stage 1 selections -->
-        </div>
-
+        <h2 class="text-lg font-semibold text-gray-900 mb-1">2. Set Up Notifications</h2>
+        <p class="text-gray-600 mb-6 text-sm">For each event you selected, configure exactly how and who gets notified. Everything is <strong>off by default</strong> — enable only what your team needs.</p>
+        <div id="notificationConfigs" class="space-y-6"></div>
+        <div id="stage2Error" class="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm hidden"></div>
         <div class="mt-8 flex justify-between">
-          <button
-            id="prevStage2"
-            class="text-gray-600 hover:text-gray-900 font-medium"
-          >
-            ← Back to Events
-          </button>
-          <button
-            id="nextStage2"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition disabled:opacity-50"
-            disabled
-          >
-            Continue to Enhancements →
-          </button>
+          <button id="prevStage2" class="text-gray-600 hover:text-gray-900 font-medium">← Back to Events</button>
+          <button id="nextStage2" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition disabled:opacity-50" disabled>Continue to Enhancements →</button>
         </div>
       </div>
 
-      <!-- Stage 3: Assignment Enhancements (Conditional) -->
+      <!-- ===== STAGE 3: Enhancements ===== -->
       <div id="stage3" class="stage bg-white rounded-xl shadow p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-2">
-          3. Assignment Enhancements
-        </h2>
-        <p class="text-gray-600 mb-6">
-          Advanced features for when issues are assigned to team members.
-          <span class="italic"
-            >Only available because you selected "Issue Assigned" in Stage
-            1.</span
-          >
-        </p>
+        <h2 class="text-lg font-semibold text-gray-900 mb-1">3. Finalize & Name Your Workflow</h2>
+        <p class="text-gray-600 mb-6 text-sm">Name your workflow and add optional enhancements.</p>
 
-        <div class="space-y-6">
-          <!-- AI Assignee Suggestions -->
-          <div class="p-4 border rounded-lg">
+        <!-- Workflow Name -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Workflow Name <span class="text-red-500">*</span></label>
+          <input type="text" id="workflowNameInput" placeholder="e.g. Bug Assignment Notifier, Sprint Tracker..."
+            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" />
+          <p class="text-xs text-gray-400 mt-1">Give this workflow a descriptive name so you can identify it later.</p>
+        </div>
+
+        <h3 class="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Optional Enhancements</h3>
+        <div class="space-y-4">
+
+          <!-- AI Solutions (shown only when issue_assigned is selected) -->
+          <div class="p-4 border rounded-lg hidden" id="aiSolutionsSection">
             <label class="flex items-start cursor-pointer">
-              <input
-                type="checkbox"
-                id="aiSuggestionsToggle"
-                class="mt-1 h-4 w-4 text-blue-600 rounded"
-              />
-              <div class="ml-3">
-                <span class="font-medium text-gray-900"
-                  >AI-Powered Assignee Suggestions</span
-                >
-                <p class="text-sm text-gray-500 mt-1">
-                  When an issue is assigned, our AI analyzes: • Past bug
-                  resolution history • Current workload • Technical expertise
-                  match
-                  <br /><br />
-                  <strong>Output</strong>: Suggests the best team member with
-                  reasoning (e.g., "Assign to Alex: solved 5 similar auth bugs
-                  last month").
-                </p>
+              <input type="checkbox" id="aiSolutionsToggle" class="mt-1 h-4 w-4 text-blue-600 rounded" />
+              <div class="ml-3 flex-1">
+                <span class="font-medium text-gray-900">💡 AI-Suggested Solutions in Notifications</span>
+                <p class="text-sm text-gray-500 mt-1">When an issue is assigned, our AI analyses it and includes potential fix suggestions in the notification sent to the assignee.</p>
+                <!-- GitHub repo for AI solution context — asked once per project -->
+                <div id="aiSolutionRepoSection" class="mt-3 hidden">
+                  <div id="aiSolutionRepoStored" class="hidden">
+                    <p class="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      ✅ GitHub repo already configured: <strong id="aiSolutionRepoUrl">—</strong>
+                      <span class="ml-2 text-blue-600 cursor-pointer underline" onclick="document.getElementById('aiSolutionRepoChange').classList.toggle('hidden')">Change</span>
+                    </p>
+                    <div id="aiSolutionRepoChange" class="hidden mt-2">
+                      <input type="url" id="aiSolutionRepoInputChange" placeholder="https://github.com/your-org/your-repo"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        pattern="https://github\.com/[^/]+/[^/]+" />
+                    </div>
+                  </div>
+                  <div id="aiSolutionRepoNew">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">GitHub Repository URL <span class="text-red-500">*</span></label>
+                    <input type="url" id="aiSolutionRepoInput" placeholder="https://github.com/your-org/your-repo"
+                      class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      pattern="https://github\.com/[^/]+/[^/]+" />
+                    <p class="text-xs text-gray-400 mt-1">Used once to give AI context about your codebase. Stored per project — won't be asked again.</p>
+                  </div>
+                </div>
               </div>
             </label>
           </div>
+            </label>
+          </div>
 
-          <!-- Auto Branch Creation -->
+          <!-- GitHub Auto-Branch -->
           <div class="p-4 border rounded-lg">
             <label class="flex items-start cursor-pointer">
-              <input
-                type="checkbox"
-                id="autoBranchToggle"
-                class="mt-1 h-4 w-4 text-blue-600 rounded"
-              />
-              <div class="ml-3">
-                <span class="font-medium text-gray-900"
-                  >Auto-Create GitHub Branch</span
-                >
-                <p class="text-sm text-gray-500 mt-1">
-                  Automatically create a feature branch in GitHub when issue is
-                  assigned.
-                  <br /><br />
-                  <strong>Requirements</strong>: • Assignee must be a
-                  contributor to the repo • You must provide GitHub access token
-                  during login <br /><br />
-                  <strong>Branch naming</strong>:
-                  <code>feature/{ISSUE_KEY}-{timestamp}</code>
-                </p>
+              <input type="checkbox" id="autoBranchToggle" class="mt-1 h-4 w-4 text-blue-600 rounded" />
+              <div class="ml-3 flex-1">
+                <span class="font-medium text-gray-900">🌿 Auto-Create GitHub Branch on Assignment</span>
+                <p class="text-sm text-gray-500 mt-1">When an issue is assigned, automatically create a feature branch in your GitHub repository named after the issue key (e.g. <code class="bg-gray-100 px-1 rounded">feature/PROJ-123</code>).</p>
                 <div id="githubRepoInput" class="mt-3 hidden">
-                  <label class="block text-sm font-medium text-gray-700 mb-1"
-                    >GitHub Repository URL</label
-                  >
-                  <input
-                    type="url"
-                    id="githubRepoUrl"
-                    placeholder="https://github.com/your-org/your-repo"
-                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    pattern="https://github\.com/[^/]+/[^/]+"
-                  />
-                  <p class="text-xs text-gray-500 mt-1">
-                    Must be a valid GitHub repository URL
+                  <label class="block text-sm font-medium text-gray-700 mb-1">GitHub Repository URL <span class="text-red-500">*</span></label>
+                  <input type="url" id="githubRepoUrl" placeholder="https://github.com/your-org/your-repo"
+                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    pattern="https://github\.com/[^/]+/[^/]+" />
+                  <p class="text-xs text-gray-400 mt-1">Must be a full GitHub repo URL. The bot needs write access to create branches.</p>
+                </div>
+                <!-- Shows already-stored repo URL -->
+                <div id="githubRepoStored" class="mt-3 hidden">
+                  <p class="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    ✅ Repository already configured: <strong id="githubRepoStoredUrl">—</strong>
                   </p>
                 </div>
               </div>
             </label>
           </div>
-        </div>
 
+        </div>
         <div class="mt-8 flex justify-between">
-          <button
-            id="prevStage3"
-            class="text-gray-600 hover:text-gray-900 font-medium"
-          >
-            ← Back to Notifications
-          </button>
-          <button
-            id="saveWorkflowBtnStage3"
-            class="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-medium transition"
-          >
-            ✓ Save & Activate Workflow
-          </button>
+          <button id="prevStage3" class="text-gray-600 hover:text-gray-900 font-medium">← Back to Notifications</button>
+          <button id="saveWorkflowBtnStage3" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-medium transition">✓ Save &amp; Activate Workflow</button>
         </div>
       </div>
 
-      <!-- Success Message -->
-      <div
-        id="successMessage"
-        class="hidden bg-green-50 border border-green-200 rounded-xl p-6 text-center"
-      >
-        <div class="text-green-500 text-4xl mb-3">✓</div>
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">
-          Workflow Saved Successfully!
-        </h3>
-        <p class="text-gray-600 mb-4">
-          Your workflow is now active and monitoring Jira events.
-        </p>
+      <!-- ===== SUCCESS ===== -->
+      <div id="successMessage" class="hidden bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+        <div class="text-green-500 text-5xl mb-3">✅</div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Workflow Saved &amp; Active!</h3>
+        <p class="text-gray-600 mb-2">Your workflow is now live. Jira events will trigger notifications according to your configuration.</p>
+        <p class="text-sm text-indigo-600 mb-4" id="redirectCountdown">Redirecting to BugSense dashboard in <strong id="countdownNum">5</strong>s...</p>
         <div class="flex justify-center gap-3">
-          <button
-            id="createAnotherBtn"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
-          >
-            Create Another Workflow
-          </button>
-          <button
-            id="viewDashboardBtn"
-            class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg font-medium"
-          >
-            Go to Dashboard
-          </button>
+          <button id="createAnotherBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium">+ Create Another Workflow</button>
+          <button id="viewDashboardBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg font-medium">→ Go to BugSense Now</button>
         </div>
       </div>
+
+      <!-- ===== CONFLICT: Event already in use ===== -->
+      <div id="duplicateAlert" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-6">
+        <div class="flex items-start gap-3">
+          <span class="text-amber-500 text-2xl">⚠️</span>
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold text-amber-900 mb-1">Event Already Used by Another Workflow</h3>
+            <p class="text-sm text-amber-700 mb-4" id="duplicateMessage">A workflow already handles this event.</p>
+            <div class="flex gap-3">
+              <button id="editExistingBtn" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition">✏️ Edit Existing Workflow</button>
+              <button id="cancelDuplicateBtn" class="text-amber-700 hover:text-amber-900 text-sm font-medium px-3 py-2">Choose Different Events</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </main>
 
     <script>
-      // ===== STATE MANAGEMENT =====
+      // ===== STATE =====
       const state = {
         currentStage: 1,
         selectedEvents: [],
-        notifications: {}, // { event: { slack, email, sms, channelLink } }
-        enhancements: {
-          aiSuggestions: false,
-          autoBranch: { enabled: false, repoUrl: "" },
-        },
-        projectKey: "KAN", // Will be populated from session
-        user: { name: "Loading...", isAdmin: true },
+        notifications: {},
+        enhancements: { aiSolutions: false, autoBranch: { enabled: false, repoUrl: "" } },
+        projectKey: null,
+        user: { name: "Loading...", isAdmin: true, accountId: null },
+        slackConnected: false,
+        slackTeamName: null,
+        slackChannels: [],
+        userSlackId: null,
+        userMobile: null,
+        projectFeatures: null,
+        projectGithubRepoUrl: null,
+        // existing workflows fetched (keyed by event → workflow)
+        usedEventMap: {},  // { issue_created: { id, name, ... }, ... }
+        // editing mode
+        editingWorkflowId: null,   // workflow being replaced
       };
 
-      // ===== DOM ELEMENTS =====
-      const elements = {
-        stages: {
-          1: document.getElementById("stage1"),
-          2: document.getElementById("stage2"),
-          3: document.getElementById("stage3"),
-        },
+      const el = {
+        stages: { 1: document.getElementById("stage1"), 2: document.getElementById("stage2"), 3: document.getElementById("stage3") },
         progressBar: document.getElementById("progressBar"),
         currentStageNum: document.getElementById("currentStageNum"),
         stageProgressText: document.getElementById("stageProgressText"),
         stage1Error: document.getElementById("stage1Error"),
-        notificationConfigs: document.getElementById("notificationConfigs"),
+        notifConfigs: document.getElementById("notificationConfigs"),
         githubRepoInput: document.getElementById("githubRepoInput"),
         githubRepoUrl: document.getElementById("githubRepoUrl"),
-        issueAssignedCheckbox: document.getElementById("issueAssignedCheckbox"),
+        githubRepoStored: document.getElementById("githubRepoStored"),
+        githubRepoStoredUrl: document.getElementById("githubRepoStoredUrl"),
         saveWorkflowBtn: document.getElementById("saveWorkflowBtn"),
         saveWorkflowBtnStage3: document.getElementById("saveWorkflowBtnStage3"),
         successMessage: document.getElementById("successMessage"),
+        duplicateAlert: document.getElementById("duplicateAlert"),
       };
 
-      // ===== INITIALIZATION =====
-      // ===== INITIALIZATION =====
+      // ===== INIT =====
       document.addEventListener("DOMContentLoaded", async () => {
-        try {
-          // REAL: Fetch authenticated user session from backend
-          const sessionRes = await axios.get("/api/session");
-          if (!sessionRes.data?.success) throw new Error("Not authenticated");
+        // Fetch session (retry once)
+        let sessionUser = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const res = await axios.get("/api/session");
+            if (res.data?.success) { sessionUser = res.data.user; break; }
+          } catch (e) {
+            if (attempt === 1) { window.location.href = "/login"; return; }
+            await new Promise(r => setTimeout(r, 600));
+          }
+        }
+        if (!sessionUser) { window.location.href = "/login"; return; }
 
-          state.user = {
-            name: sessionRes.data.user.displayName,
-            email: sessionRes.data.user.email,
-            isAdmin: sessionRes.data.user.isAdmin,
-          };
-          state.projectKey = sessionRes.data.user.jiraProjectKey;
+        const u = sessionUser;
+        state.projectKey      = u.jiraProjectKey;
+        state.user            = { name: u.displayName || u.email, isAdmin: u.isAdmin, accountId: u.jiraAccountId, email: u.email };
+        state.slackConnected  = u.slackConnected || false;
+        state.slackTeamName   = u.slackTeamName || null;
+        state.userSlackId     = u.projectMember?.slackUserId || null;
+        state.userMobile      = u.projectMember?.phoneNumber || null;
 
-          // Update UI with real data
-          document.getElementById("headerProjectKey").textContent =
-            state.projectKey;
-          document.getElementById("adminName").textContent = state.user.name;
-        } catch (error) {
-          console.error("Failed to load session:", error);
-          window.location.href = "/login"; // Redirect if not authenticated
+        document.getElementById("adminName").textContent       = state.user.name || "Admin";
+        document.getElementById("headerProjectKey").textContent = state.projectKey || "—";
+        document.getElementById("featureProjectKey").textContent = state.projectKey || "—";
+
+        if (!state.user.isAdmin) {
+          alert("Admin access required to manage workflows.");
+          window.location.href = "/dashboard";
           return;
         }
 
-        // Setup event listeners (your existing function)
-        setupEventListeners();
+        // Fetch Slack channels
+        if (state.slackConnected) await fetchSlackChannels();
 
-        // ✅ ADD THIS: Check Slack integration status (real backend call)
-        await checkSlackIntegration();
+        // Check features first-time
+        try {
+          const fRes = await axios.get("/api/admin/projects/features", { headers: { "X-Project-Key": state.projectKey } });
+          if (fRes.data?.success && !fRes.data.features) {
+            setupListeners();
+            goToStage(0);
+            return;
+          }
+          state.projectFeatures = fRes.data.features;
+        } catch (e) { /* proceed */ }
 
-        // ✅ ADD THIS: Fetch existing workflows (real backend call)
+        // Fetch existing workflows → preload usedEventMap
         await fetchExistingWorkflows();
+
+        // GitHub repo URL
+        try {
+          const iRes = await axios.get("/api/admin/integrations", { headers: { "X-Project-Key": state.projectKey } });
+          if (iRes.data?.github?.repoUrl) state.projectGithubRepoUrl = iRes.data.github.repoUrl;
+        } catch (e) { /* ok */ }
+
+        setupListeners();
+        goToStage(1);
+
+        // Signal to parent (dashboard) that builder is ready to receive edit data
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: "builderReady" }, "*");
+        }
+
+        // Listen for edit data from parent
+        window.addEventListener("message", (e) => {
+          if (e.data?.type === "loadWorkflowForEdit" && e.data.workflow) {
+            loadWorkflowForEdit(e.data.workflow);
+          }
+        });
       });
 
-      function setupEventListeners() {
-        // Stage 1: Event selection
-        document.querySelectorAll('input[name="event"]').forEach((checkbox) => {
-          checkbox.addEventListener("change", validateStage1);
+      // ===== FETCH SLACK CHANNELS =====
+      async function fetchSlackChannels() {
+        try {
+          const res = await axios.get("/api/admin/integrations/slack/channels", { headers: { "X-Project-Key": state.projectKey } });
+          if (res.data?.success) {
+            state.slackChannels  = res.data.channels || [];
+            state.slackConnected = res.data.connected !== false;
+            state.slackTeamName  = res.data.teamName || state.slackTeamName;
+          }
+        } catch (e) { console.warn("Failed to fetch Slack channels:", e.message); }
+      }
+
+      // ===== FETCH EXISTING WORKFLOWS → build usedEventMap =====
+      async function fetchExistingWorkflows() {
+        try {
+          const res = await axios.get("/api/workflows", { headers: { "X-Project-Key": state.projectKey } });
+          if (res.data?.success && Array.isArray(res.data.data)) {
+            state.usedEventMap = {};
+            for (const wf of res.data.data.filter(w => w.isActive)) {
+              for (const ev of (wf.trigger?.events || [])) {
+                state.usedEventMap[ev] = wf;
+              }
+            }
+            renderEventLocks();
+          }
+        } catch (e) { console.warn("Could not fetch workflows:", e.message); }
+      }
+
+      // ===== RENDER EVENT LOCK BANNERS =====
+      function renderEventLocks() {
+        document.querySelectorAll('label[data-event]').forEach(label => {
+          const ev = label.dataset.event;
+          const existing = state.usedEventMap[ev];
+          // Remove old banner
+          label.querySelector(".event-locked-banner")?.remove();
+          label.classList.remove("event-locked");
+
+          if (existing && existing.id !== state.editingWorkflowId) {
+            const cb = label.querySelector('input[type="checkbox"]');
+            if (cb) { cb.checked = false; cb.disabled = true; }
+            label.classList.add("event-locked");
+            const banner = document.createElement("div");
+            banner.className = "event-locked-banner";
+            const wfName = existing.name || "Workflow";
+            banner.innerHTML = `⚠️ Already used by "${wfName}" — <a href="#" class="underline font-semibold text-amber-800 hover:text-amber-900">Click here to edit that workflow instead</a>`;
+            // Make the link clickable
+            banner.querySelector("a").addEventListener("click", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              startEditWorkflow(existing.id, wfName);
+            });
+            label.appendChild(banner);
+          } else {
+            const cb = label.querySelector('input[type="checkbox"]');
+            if (cb) cb.disabled = false;
+          }
         });
-        document
-          .getElementById("nextStage1")
-          .addEventListener("click", goToStage2);
+      }
 
-        // Stage 2: Navigation
-        document
-          .getElementById("prevStage2")
-          .addEventListener("click", () => goToStage(1));
-        document
-          .getElementById("nextStage2")
-          .addEventListener("click", goToStage3);
+      // ===== START EDITING AN EXISTING WORKFLOW (delete + recreate) =====
+      async function startEditWorkflow(workflowId, workflowName) {
+        if (!confirm(`You are about to edit "${workflowName}".\n\nThis will open the builder with all your current settings pre-filled so you can adjust and save again.\n\nContinue?`)) return;
 
-        // Stage 3: GitHub repo toggle
-        document
-          .getElementById("autoBranchToggle")
-          .addEventListener("change", (e) => {
-            elements.githubRepoInput.classList.toggle(
-              "hidden",
-              !e.target.checked,
-            );
-            if (e.target.checked) elements.githubRepoUrl.required = true;
-            else elements.githubRepoUrl.required = false;
-            validateStage3();
-          });
-        elements.githubRepoUrl.addEventListener("input", validateStage3);
+        try {
+          // 1. Fetch the full workflow data BEFORE deleting
+          const wfRes = await axios.get(`/api/workflows/${workflowId}`, { headers: { "X-Project-Key": state.projectKey } });
+          const workflowData = wfRes.data?.data;
+          if (!workflowData) throw new Error("Could not load workflow data");
 
-        // Stage 3: Navigation & Save
-        document
-          .getElementById("prevStage3")
-          .addEventListener("click", () => goToStage(2));
-        elements.saveWorkflowBtnStage3.addEventListener("click", saveWorkflow);
+          // 2. Soft-delete the existing workflow so events are freed
+          await axios.delete(`/api/workflows/${workflowId}`, { headers: { "X-Project-Key": state.projectKey } });
+          state.editingWorkflowId = workflowId;
 
-        // Global save button (enabled only in stage 3)
-        elements.saveWorkflowBtn.addEventListener("click", saveWorkflow);
+          // 3. Refresh event map so the deleted workflow's events are now free
+          await fetchExistingWorkflows();
 
-        // Success actions
-        document
-          .getElementById("createAnotherBtn")
-          .addEventListener("click", () => {
-            elements.successMessage.classList.add("hidden");
-            resetForm();
+          // 4. Pre-populate from the saved workflow data
+          loadWorkflowForEdit(workflowData);
+
+          el.duplicateAlert.classList.add("hidden");
+          el.successMessage.classList.add("hidden");
+        } catch (err) {
+          alert("Could not start edit: " + (err.response?.data?.error || err.message));
+        }
+      }
+
+      // ===== LOAD WORKFLOW DATA FOR EDITING (pre-populate all stages) =====
+      function loadWorkflowForEdit(wf) {
+        // Reset form first
+        resetForm();
+
+        const events = wf.trigger?.events || [];
+        const notifs = wf.notifications || {};
+        const enh    = wf.enhancements || {};
+
+        // --- STAGE 1: Check the event checkboxes ---
+        events.forEach(ev => {
+          const cb = document.querySelector(`input[name="event"][value="${ev}"]`);
+          if (cb && !cb.disabled) cb.checked = true;
+        });
+        state.selectedEvents = events.filter(ev => {
+          const cb = document.querySelector(`input[name="event"][value="${ev}"]`);
+          return cb && !cb.disabled;
+        });
+        validateStage1();
+
+        // --- STAGE 2: Pre-populate notification state ---
+        for (const [ev, cfg] of Object.entries(notifs)) {
+          state.notifications[ev] = JSON.parse(JSON.stringify(cfg)); // deep clone
+        }
+
+        // --- STAGE 3: Pre-populate name and enhancements ---
+        if (wf.name) {
+          document.getElementById("workflowNameInput").value = wf.name;
+        }
+        if (enh.aiSolutions) {
+          document.getElementById("aiSolutionsToggle").checked = true;
+        }
+        if (enh.autoBranch?.enabled) {
+          document.getElementById("autoBranchToggle").checked = true;
+          if (state.projectGithubRepoUrl) {
+            el.githubRepoStored.classList.remove("hidden");
+            el.githubRepoStoredUrl.textContent = state.projectGithubRepoUrl;
+          } else if (enh.autoBranch.repoUrl) {
+            el.githubRepoInput.classList.remove("hidden");
+            el.githubRepoUrl.value = enh.autoBranch.repoUrl;
+          }
+        }
+
+        // Go to stage 1 with checkboxes pre-filled
+        Object.values(el.stages).forEach(s => s.classList.remove("active"));
+        el.stages[1].classList.add("active");
+        state.currentStage = 1;
+        updateProgress(1);
+      }
+
+      // ===== EVENT LISTENERS =====
+      function setupListeners() {
+        // Stage 0
+        document.getElementById("saveFeaturesBtn")?.addEventListener("click", async () => {
+          const features = {
+            aiAssigneeSuggestions:  document.querySelector('[value="aiAssigneeSuggestions"]')?.checked || false,
+            reportGeneration:       document.querySelector('[value="reportGeneration"]')?.checked || false,
+            sentryEnabled:          document.querySelector('[value="sentryEnabled"]')?.checked || false,
+          };
+          try {
+            await axios.put("/api/admin/projects/features", features, { headers: { "X-Project-Key": state.projectKey } });
+            state.projectFeatures = features;
             goToStage(1);
-          });
-        document
-          .getElementById("viewDashboardBtn")
-          .addEventListener("click", () => {
-            window.location.href = "/dashboard";
-          });
+          } catch (e) { alert("Could not save features: " + e.message); }
+        });
+
+        // Stage 1
+        document.querySelectorAll('input[name="event"]').forEach(cb => cb.addEventListener("change", validateStage1));
+        document.getElementById("nextStage1").addEventListener("click", () => { if (validateStage1()) goToStage(2); });
+
+        // Stage 2
+        document.getElementById("prevStage2").addEventListener("click", () => goToStage(1));
+        document.getElementById("nextStage2").addEventListener("click", () => { if (validateAndCheckContactInfo()) goToStage(3); });
+
+        // Stage 3
+        document.getElementById("autoBranchToggle").addEventListener("change", e => {
+          if (state.projectGithubRepoUrl) {
+            el.githubRepoUrl.value = state.projectGithubRepoUrl;
+            el.githubRepoStored.classList.toggle("hidden", !e.target.checked);
+            el.githubRepoStoredUrl.textContent = state.projectGithubRepoUrl;
+            el.githubRepoInput.classList.add("hidden");
+          } else {
+            el.githubRepoInput.classList.toggle("hidden", !e.target.checked);
+            el.githubRepoStored.classList.add("hidden");
+          }
+        });
+
+        // AI Solutions toggle — show GitHub repo input (once per project)
+        document.getElementById("aiSolutionsToggle").addEventListener("change", e => {
+          const section = document.getElementById("aiSolutionRepoSection");
+          if (!section) return;
+          section.classList.toggle("hidden", !e.target.checked);
+          if (e.target.checked) {
+            // Check if repo already stored
+            if (state.projectGithubRepoUrl) {
+              document.getElementById("aiSolutionRepoStored")?.classList.remove("hidden");
+              document.getElementById("aiSolutionRepoNew")?.classList.add("hidden");
+              const urlEl = document.getElementById("aiSolutionRepoUrl");
+              if (urlEl) urlEl.textContent = state.projectGithubRepoUrl;
+            } else {
+              document.getElementById("aiSolutionRepoStored")?.classList.add("hidden");
+              document.getElementById("aiSolutionRepoNew")?.classList.remove("hidden");
+            }
+          }
+        });
+        document.getElementById("prevStage3").addEventListener("click", () => goToStage(2));
+        el.saveWorkflowBtnStage3.addEventListener("click", saveWorkflow);
+        el.saveWorkflowBtn.addEventListener("click", saveWorkflow);
+
+        // Success
+        document.getElementById("createAnotherBtn").addEventListener("click", async () => {
+          el.successMessage.classList.add("hidden");
+          state.editingWorkflowId = null;
+          // Refresh workflows so new event locks are in place
+          await fetchExistingWorkflows();
+          resetForm();
+          goToStage(1);
+        });
+        document.getElementById("viewDashboardBtn").addEventListener("click", () => {
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "workflowSaved" }, "*");
+          } else {
+            window.location.href = "/bugsense";
+          }
+        });
+
+        // Duplicate alert actions
+        document.getElementById("cancelDuplicateBtn")?.addEventListener("click", () => {
+          el.duplicateAlert.classList.add("hidden");
+          goToStage(1);
+        });
+
+        // Modals
+        document.getElementById("slackIdSaveBtn").addEventListener("click", saveSlackId);
+        document.getElementById("slackIdCancelBtn").addEventListener("click", () => document.getElementById("slackIdModal").classList.add("hidden"));
+        document.getElementById("mobileSaveBtn").addEventListener("click", saveMobile);
+        document.getElementById("mobileCancelBtn").addEventListener("click", () => document.getElementById("mobileModal").classList.add("hidden"));
       }
 
       // ===== STAGE NAVIGATION =====
-      function goToStage(stageNum) {
-        // Hide all stages
-        Object.values(elements.stages).forEach((el) =>
-          el.classList.remove("active"),
-        );
+      function goToStage(n) {
+        if (state.currentStage === 2) saveStage2State();
 
-        // Show target stage
-        elements.stages[stageNum].classList.add("active");
-
-        // Update progress UI
-        state.currentStage = stageNum;
-        elements.currentStageNum.textContent = stageNum;
-        elements.progressBar.style.width = `${stageNum * 33.33}%`;
-
-        const stageNames = {
-          1: "Event Selection",
-          2: "Notification Configuration",
-          3: "Assignment Enhancements",
-        };
-        elements.stageProgressText.textContent = stageNames[stageNum];
-
-        // Enable/disable global save button
-        elements.saveWorkflowBtn.disabled = stageNum !== 3;
-
-        // Special handling for stage transitions
-        if (stageNum === 2) renderNotificationConfigs();
-        if (stageNum === 3) validateStage3(); // Initial validation
-      }
-
-      function goToStage2() {
-        if (!validateStage1()) return;
-        goToStage(2);
-      }
-
-      function goToStage3() {
-        if (!validateStage2()) return;
-
-        // Only show stage 3 if issue_assigned was selected
-        if (state.selectedEvents.includes("issue_assigned")) {
-          goToStage(3);
-        } else {
-          // Skip to save if no enhancements applicable
-          saveWorkflow();
+        if (n === 0) {
+          document.getElementById("stage0").classList.add("active");
+          Object.values(el.stages).forEach(s => s.classList.remove("active"));
+          document.getElementById("progressBarWrapper").classList.add("hidden");
+          state.currentStage = 0;
+          return;
         }
+
+        document.getElementById("progressBarWrapper").classList.remove("hidden");
+        document.getElementById("stage0")?.classList.remove("active");
+        el.successMessage.classList.add("hidden");
+        el.duplicateAlert.classList.add("hidden");
+        Object.values(el.stages).forEach(s => s.classList.remove("active"));
+        if (el.stages[n]) el.stages[n].classList.add("active");
+
+        state.currentStage = n;
+        updateProgress(n);
+        el.saveWorkflowBtn.disabled = n !== 3;
+
+        if (n === 2) renderNotificationConfigs();
+        if (n === 3) {
+          const ia = state.notifications["issue_assigned"]?.enabled;
+          const aiSec = document.getElementById("aiSolutionsSection");
+          if (aiSec) { aiSec.classList.toggle("hidden", !ia); if (!ia) document.getElementById("aiSolutionsToggle").checked = false; }
+          // Show stored repo OR input
+          if (state.projectGithubRepoUrl && document.getElementById("autoBranchToggle").checked) {
+            el.githubRepoUrl.value = state.projectGithubRepoUrl;
+            el.githubRepoStored.classList.remove("hidden");
+            el.githubRepoStoredUrl.textContent = state.projectGithubRepoUrl;
+            el.githubRepoInput.classList.add("hidden");
+          }
+        }
+      }
+
+      function updateProgress(n) {
+        el.currentStageNum.textContent  = n;
+        el.progressBar.style.width      = `${n * 33.33}%`;
+        el.stageProgressText.textContent = { 1: "Event Selection", 2: "Notification Setup", 3: "Enhancements" }[n];
       }
 
       // ===== STAGE 1 VALIDATION =====
       function validateStage1() {
-        const checkboxes = document.querySelectorAll(
-          'input[name="event"]:checked',
-        );
-        state.selectedEvents = Array.from(checkboxes).map((cb) => cb.value);
-
-        const errorEl = elements.stage1Error;
-        const nextBtn = document.getElementById("nextStage1");
-
-        if (state.selectedEvents.length === 0) {
-          errorEl.textContent =
-            "Please select at least one trigger event to continue.";
-          errorEl.classList.remove("hidden");
-          nextBtn.disabled = true;
-          return false;
-        }
-
-        // Check for duplicate triggers (would be caught on save, but give early warning)
-        // In real app: call backend to check existing workflows
-        errorEl.classList.add("hidden");
-        nextBtn.disabled = false;
-        return true;
+        state.selectedEvents = Array.from(document.querySelectorAll('input[name="event"]:checked')).map(cb => cb.value);
+        const ok = state.selectedEvents.length > 0;
+        el.stage1Error.classList.toggle("hidden", ok);
+        if (!ok) el.stage1Error.textContent = "Please select at least one trigger event.";
+        document.getElementById("nextStage1").disabled = !ok;
+        return ok;
       }
 
-      // ===== STAGE 2: DYNAMIC NOTIFICATION CONFIGS =====
+      // ===== STAGE 2: RENDER =====
       function renderNotificationConfigs() {
-        elements.notificationConfigs.innerHTML = "";
+        el.notifConfigs.innerHTML = "";
+        const labels = {
+          issue_created: "🆕 Issue Created",
+          issue_assigned: "👤 Issue Assigned",
+          issue_transitioned: "🔄 Status Changed",
+          issue_commented: "💬 Comment Added",
+          issue_updated: "✏️ Issue Updated"
+        };
 
-        state.selectedEvents.forEach((event) => {
-          const configDiv = document.createElement("div");
-          configDiv.className = "p-4 border rounded-lg bg-gray-50 mb-4";
-          configDiv.dataset.event = event;
+        state.selectedEvents.forEach(event => {
+          const div = document.createElement("div");
+          div.className = "p-5 border-2 border-gray-200 rounded-xl bg-white mb-4";
+          div.dataset.event = event;
 
-          const eventLabel =
-            {
-              issue_created: "Issue Created",
-              issue_assigned: "Issue Assigned",
-              issue_transitioned: "Status Changed",
-              issue_commented: "Comment Added",
-              issue_updated: "Issue Updated",
-              issue_deleted: "Issue Deleted",
-            }[event] || event;
-
-          const eventDesc =
-            {
-              issue_created:
-                "Notify your team channel when a new issue is created",
-              issue_assigned:
-                "Notify the assigned person (and optionally team) when work is assigned",
-              issue_transitioned:
-                "Notify when issue status changes (e.g., In Progress → Done)",
-              issue_commented: "Notify when someone adds a comment to an issue",
-              issue_updated: "Notify when any issue field is modified",
-              issue_deleted: "Notify when an issue is deleted",
-            }[event] || "";
-
-          // ✅ MASTER TOGGLE: "Do you want notifications for this event?"
-          configDiv.innerHTML = `
-      <div class="flex items-start justify-between mb-3">
-        <div>
-          <h3 class="font-medium text-gray-900">${eventLabel}</h3>
-          <p class="text-sm text-gray-600">${eventDesc}</p>
-        </div>
-        <label class="flex items-center cursor-pointer">
-          <input type="checkbox" class="event-enabled-toggle h-4 w-4 text-blue-600 rounded" 
-                 data-event="${event}" ${state.notifications[event]?.enabled ? "checked" : ""}>
-          <span class="ml-2 text-sm font-medium text-gray-700">Enable notifications</span>
-        </label>
-      </div>
-      
-      <div class="event-config-content ${state.notifications[event]?.enabled ? "" : "hidden"}" 
-           data-event="${event}">
-    `;
+          const prevNotif = state.notifications[event] || {};
 
           if (event === "issue_assigned") {
-            // ✅ SPECIAL CONFIG FOR issue_assigned (Slack optional, priority logic)
-            const notif = state.notifications[event] || {};
-            const emailPrio = notif.email?.priorities || {
-              low: false,
-              medium: true,
-              high: true,
-            };
-            const smsPrio = notif.sms?.priorities || {
-              low: false,
-              medium: false,
-              high: true,
-            };
-
-            configDiv.querySelector(".event-config-content").innerHTML += `
-        <!-- Slack Notification (now optional + uncheckable) -->
-        <div class="mb-4 p-3 bg-gray-100 rounded">
-          <label class="flex items-center mb-2">
-            <input type="checkbox" class="slack-enabled h-4 w-4 text-blue-600 rounded priority-toggle"
-                   data-type="slack" ${notif.slack?.enabled !== false ? "checked" : ""}>
-            <span class="ml-2 text-sm font-medium text-gray-700">Send to assigned person's Slack DM</span>
-          </label>
-          <p class="text-xs text-gray-500 ml-6 mb-2">When enabled, always sends for all priorities</p>
-          
-          <label class="block text-xs font-medium text-gray-600 mb-1 ml-6">
-            Optional: Also broadcast to team channel
-          </label>
-          <input type="url" 
-                 class="slack-channel w-full px-3 py-2 border rounded-lg text-sm channel-input ml-6"
-                 placeholder="https://your-team.slack.com/archives/C01234567"
-                 pattern="^https://[^.]+\.slack\.com/archives/[^/]+$"
-                 value="${notif.slack?.channelLink || ""}">
-          <p class="text-xs text-gray-400 ml-6 mt-1">Leave empty to only DM the assignee</p>
-        </div>
-        
-        <!-- Email Notification -->
-        <div class="mb-4 p-3 bg-gray-100 rounded">
-          <label class="flex items-center mb-2">
-            <input type="checkbox" class="email-enabled h-4 w-4 text-blue-600 rounded priority-toggle"
-                   data-type="email" ${notif.email?.enabled ? "checked" : ""}>
-            <span class="ml-2 text-sm font-medium text-gray-700">Send email to assignee</span>
-          </label>
-          
-          <div class="ml-6 mt-2 space-y-2">
-            <!-- Smart Default Toggle -->
-            <label class="flex items-center cursor-pointer">
-              <input type="checkbox" class="email-default-priority h-3 w-3 text-blue-600 rounded"
-                     ${notif.email?.useDefaultPriority !== false ? "checked" : ""}>
-              <span class="ml-2 text-xs text-gray-600">Use smart default: send for medium + high priority only</span>
-            </label>
-            
-            <!-- Manual Priority Selection (only shown if default unchecked) -->
-            <div class="email-priority-manual ${notif.email?.useDefaultPriority !== false ? "hidden" : ""} space-y-1 pl-4 border-l-2 border-gray-200">
-              <label class="flex items-center text-xs">
-                <input type="checkbox" class="priority-checkbox h-3 w-3 text-blue-600 rounded" 
-                       data-priority="low" ${emailPrio.low ? "checked" : ""}> Low priority issues
-              </label>
-              <label class="flex items-center text-xs">
-                <input type="checkbox" class="priority-checkbox h-3 w-3 text-blue-600 rounded" 
-                       data-priority="medium" ${emailPrio.medium ? "checked" : ""}> Medium priority issues
-              </label>
-              <label class="flex items-center text-xs">
-                <input type="checkbox" class="priority-checkbox h-3 w-3 text-blue-600 rounded" 
-                       data-priority="high" ${emailPrio.high ? "checked" : ""}> High priority issues
-              </label>
-            </div>
-          </div>
-        </div>
-        
-        <!-- SMS Notification -->
-        <div class="mb-4 p-3 bg-gray-100 rounded">
-          <label class="flex items-center mb-2">
-            <input type="checkbox" class="sms-enabled h-4 w-4 text-blue-600 rounded priority-toggle"
-                   data-type="sms" ${notif.sms?.enabled ? "checked" : ""}>
-            <span class="ml-2 text-sm font-medium text-gray-700">Send SMS to assignee</span>
-          </label>
-          
-          <div class="ml-6 mt-2 space-y-2">
-            <!-- Smart Default Toggle -->
-            <label class="flex items-center cursor-pointer">
-              <input type="checkbox" class="sms-default-priority h-3 w-3 text-blue-600 rounded"
-                     ${notif.sms?.useDefaultPriority !== false ? "checked" : ""}>
-              <span class="ml-2 text-xs text-gray-600">Use smart default: send for high priority only</span>
-            </label>
-            
-            <!-- Manual Priority Selection -->
-            <div class="sms-priority-manual ${notif.sms?.useDefaultPriority !== false ? "hidden" : ""} space-y-1 pl-4 border-l-2 border-gray-200">
-              <label class="flex items-center text-xs">
-                <input type="checkbox" class="priority-checkbox h-3 w-3 text-blue-600 rounded" 
-                       data-priority="low" ${smsPrio.low ? "checked" : ""}> Low priority issues
-              </label>
-              <label class="flex items-center text-xs">
-                <input type="checkbox" class="priority-checkbox h-3 w-3 text-blue-600 rounded" 
-                       data-priority="medium" ${smsPrio.medium ? "checked" : ""}> Medium priority issues
-              </label>
-              <label class="flex items-center text-xs">
-                <input type="checkbox" class="priority-checkbox h-3 w-3 text-blue-600 rounded" 
-                       data-priority="high" ${smsPrio.high ? "checked" : ""}> High priority issues
-              </label>
-            </div>
-          </div>
-        </div>
-      `;
+            div.innerHTML = renderIssueAssignedConfig(event, prevNotif);
           } else {
-            // ✅ SIMPLE CONFIG FOR OTHER EVENTS (just channel link, optional)
-            configDiv.querySelector(".event-config-content").innerHTML += `
-        <label class="block text-sm font-medium text-gray-700 mb-1">Slack Channel Link</label>
-        <input type="url" 
-               class="channel-input w-full px-3 py-2 border rounded-lg text-sm"
-               placeholder="https://your-team.slack.com/archives/C01234567"
-               pattern="^https://[^.]+\.slack\.com/archives/[^/]+$"
-               value="${state.notifications[event]?.channelLink || ""}">
-        <p class="text-xs text-gray-500 mt-1">Paste the full Slack channel URL. Leave empty to skip notifications for this event.</p>
-      `;
+            div.innerHTML = renderGenericEventConfig(event, labels[event] || event, prevNotif);
           }
 
-          configDiv.querySelector(".event-config-content").innerHTML +=
-            `</div>`; // Close config div
-          elements.notificationConfigs.appendChild(configDiv);
-
-          // ✅ Attach event listeners AFTER DOM insertion
-          setupEventListenersForEvent(event, configDiv);
+          el.notifConfigs.appendChild(div);
+          setupStage2Listeners(event, div);
         });
 
-        validateStage2(); // Initial validation
+        validateStage2();
       }
 
-      // ✅ Helper: Setup listeners for a single event config
-      function setupEventListenersForEvent(event, configDiv) {
-        const enabledToggle = configDiv.querySelector(".event-enabled-toggle");
-        const configContent = configDiv.querySelector(".event-config-content");
+      // ===== ISSUE ASSIGNED CONFIG (4 checkboxes: Slack, Email, SMS, Default) =====
+      function renderIssueAssignedConfig(event, notif) {
+        // Everything OFF by default unless previously saved
+        const enabled       = notif.enabled === true;
+        const slackChecked  = notif.slack?.enabled === true;
+        const emailChecked  = notif.email?.enabled === true;
+        const smsChecked    = notif.sms?.enabled === true;
+        const useDefault    = notif.useDefaultPriority === true;
 
-        // Toggle config visibility when master toggle changes
-        enabledToggle.addEventListener("change", (e) => {
-          configContent.classList.toggle("hidden", !e.target.checked);
+        const emailP = notif.email?.priorities || {};
+        const smsP   = notif.sms?.priorities   || {};
+
+        const channelDropdown = buildChannelDropdown(`ia-channel`, notif.slack?.channelId || "");
+
+        return `
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-900 text-base">👤 Issue Assigned</h3>
+              <p class="text-sm text-gray-500 mt-0.5">Notify the assignee (and optionally the team) whenever an issue is assigned to someone.</p>
+            </div>
+            <label class="flex items-center cursor-pointer gap-2 shrink-0 ml-4">
+              <input type="checkbox" class="event-toggle h-4 w-4 text-blue-600 rounded" data-event="${event}" ${enabled ? "checked" : ""}>
+              <span class="text-sm font-medium text-gray-700">Enable</span>
+            </label>
+          </div>
+
+          <div class="event-config space-y-3 ${enabled ? "" : "hidden"}" data-event="${event}">
+
+            <!-- ① SLACK DM -->
+            <div class="p-4 border rounded-lg bg-gray-50">
+              <label class="flex items-start cursor-pointer gap-2">
+                <input type="checkbox" class="slack-enabled mt-0.5 h-4 w-4 text-blue-600 rounded" ${slackChecked ? "checked" : ""}>
+                <div class="flex-1">
+                  <span class="text-sm font-semibold text-gray-800">💬 Slack DM to Assignee</span>
+                  <p class="text-xs text-gray-500 mt-0.5">A direct message is sent to the assignee in Slack — regardless of issue priority.</p>
+                  <div class="mt-2 ${slackChecked ? "" : "hidden"} slack-channel-row">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Optional: Also post to a team channel</label>
+                    ${state.slackConnected ? channelDropdown : renderConnectSlackBtn()}
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <!-- ② EMAIL -->
+            <div class="p-4 border rounded-lg bg-gray-50">
+              <label class="flex items-start cursor-pointer gap-2">
+                <input type="checkbox" class="email-enabled mt-0.5 h-4 w-4 text-blue-600 rounded" ${emailChecked ? "checked" : ""}>
+                <div class="flex-1">
+                  <span class="text-sm font-semibold text-gray-800">📧 Email to Assignee</span>
+                  <p class="text-xs text-gray-500 mt-0.5">Send an email to the assignee's Jira email address.</p>
+                  <div class="mt-2 prio-sub ${emailChecked ? "" : "dimmed"}">
+                    <p class="text-xs font-medium text-gray-600 mb-1">Send for which priorities?</p>
+                    <div class="flex gap-4">
+                      <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="prio-cb h-3 w-3 text-blue-600 rounded" data-type="email" data-prio="low" ${emailP.low ? "checked" : ""}> 🟢 Low</label>
+                      <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="prio-cb h-3 w-3 text-blue-600 rounded" data-type="email" data-prio="medium" ${emailP.medium ? "checked" : ""}> 🟡 Medium</label>
+                      <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="prio-cb h-3 w-3 text-blue-600 rounded" data-type="email" data-prio="high" ${emailP.high ? "checked" : ""}> 🔴 High</label>
+                    </div>
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <!-- ③ SMS -->
+            <div class="p-4 border rounded-lg bg-gray-50">
+              <label class="flex items-start cursor-pointer gap-2">
+                <input type="checkbox" class="sms-enabled mt-0.5 h-4 w-4 text-blue-600 rounded" ${smsChecked ? "checked" : ""}>
+                <div class="flex-1">
+                  <span class="text-sm font-semibold text-gray-800">📱 SMS to Assignee</span>
+                  <p class="text-xs text-gray-500 mt-0.5">Send a text message to the assignee's registered mobile number.</p>
+                  <div class="mt-2 prio-sub ${smsChecked ? "" : "dimmed"}">
+                    <p class="text-xs font-medium text-gray-600 mb-1">Send for which priorities?</p>
+                    <div class="flex gap-4">
+                      <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="prio-cb h-3 w-3 text-blue-600 rounded" data-type="sms" data-prio="low" ${smsP.low ? "checked" : ""}> 🟢 Low</label>
+                      <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="prio-cb h-3 w-3 text-blue-600 rounded" data-type="sms" data-prio="medium" ${smsP.medium ? "checked" : ""}> 🟡 Medium</label>
+                      <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="prio-cb h-3 w-3 text-blue-600 rounded" data-type="sms" data-prio="high" ${smsP.high ? "checked" : ""}> 🔴 High</label>
+                    </div>
+                  </div>
+                </div>
+              </label>
+            </div>
+
+            <!-- ④ USE DEFAULT -->
+            <div class="p-4 border-2 border-dashed border-blue-200 rounded-lg bg-blue-50">
+              <label class="flex items-start cursor-pointer gap-2">
+                <input type="checkbox" class="use-default mt-0.5 h-4 w-4 text-blue-600 rounded" ${useDefault ? "checked" : ""}>
+                <div>
+                  <span class="text-sm font-semibold text-blue-800">⭐ Use Recommended Defaults</span>
+                  <p class="text-xs text-blue-700 mt-0.5">Automatically apply the recommended configuration: Slack DM (all priorities) + Email (Medium &amp; High) + SMS (High only). Checking this will override your current selections above.</p>
+                </div>
+              </label>
+            </div>
+
+          </div>`;
+      }
+
+      // ===== GENERIC EVENT CONFIG =====
+      function renderGenericEventConfig(event, label, notif) {
+        const enabled       = notif.enabled === true; // OFF by default
+        const channelDropdown = buildChannelDropdown(`ev-${event}-channel`, notif.channelId || "");
+
+        const eventDescriptions = {
+          issue_created:     "When a new issue is created, a message will be posted to the selected Slack channel.",
+          issue_transitioned:"When an issue moves to a new status, a message will be posted to the selected Slack channel.",
+          issue_commented:   "When a comment is added to any issue, a message will be posted to the selected Slack channel.",
+          issue_updated:     "When any field on an issue is modified, a message will be posted to the selected Slack channel.",
+        };
+
+        return `
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-900 text-base">${label}</h3>
+              <p class="text-xs text-gray-500 mt-0.5">${eventDescriptions[event] || ""}</p>
+            </div>
+            <label class="flex items-center cursor-pointer gap-2 shrink-0 ml-4">
+              <input type="checkbox" class="event-toggle h-4 w-4 text-blue-600 rounded" data-event="${event}" ${enabled ? "checked" : ""}>
+              <span class="text-sm font-medium text-gray-700">Enable</span>
+            </label>
+          </div>
+          <div class="event-config ${enabled ? "" : "hidden"}" data-event="${event}">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Slack Channel to notify <span class="text-red-500">*</span></label>
+            ${state.slackConnected ? channelDropdown : renderConnectSlackBtn()}
+          </div>`;
+      }
+
+      // ===== BUILD CHANNEL DROPDOWN =====
+      function buildChannelDropdown(id, selectedId) {
+        let opts = '<option value="">— Select a channel —</option>';
+        for (const ch of state.slackChannels) {
+          const sel  = ch.id === selectedId ? "selected" : "";
+          const icon = ch.isPrivate ? "🔒" : "#";
+          opts += `<option value="${ch.id}" ${sel}>${icon} ${ch.name}</option>`;
+        }
+        return `<select id="${id}" class="channel-select w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500">${opts}</select>
+                <p class="text-xs text-gray-400 mt-1">Connected to: <strong>${state.slackTeamName || "workspace"}</strong> &middot; ${state.slackChannels.length} channels available</p>`;
+      }
+
+      // ===== CONNECT SLACK BUTTON =====
+      function renderConnectSlackBtn() {
+        return `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p class="text-sm text-amber-800 mb-2">⚠️ No Slack workspace connected yet for this project.</p>
+          <a href="/slack/install?projectKey=${state.projectKey}" target="_blank" rel="noopener"
+            class="inline-flex items-center px-4 py-2 bg-[#4A154B] hover:bg-[#611f69] text-white text-sm font-medium rounded-lg transition">
+            Connect Slack Workspace
+          </a>
+          <button type="button" class="ml-2 text-sm text-blue-600 hover:underline refresh-channels-btn">Refresh after connecting</button>
+        </div>`;
+      }
+
+      // ===== STAGE 2 LISTENERS =====
+      function setupStage2Listeners(event, div) {
+        const toggle = div.querySelector(".event-toggle");
+        const config = div.querySelector(".event-config");
+
+        // Enable/disable the whole config block
+        toggle?.addEventListener("change", e => {
+          config?.classList.toggle("hidden", !e.target.checked);
+
+          // When enabling issue_assigned for the first time, auto-check the 4 defaults
+          if (e.target.checked && event === "issue_assigned") {
+            const useDefaultCb = div.querySelector(".use-default");
+            // Only apply defaults if nothing was previously configured
+            const prevNotif = state.notifications[event];
+            if (!prevNotif || !prevNotif.enabled) {
+              if (useDefaultCb) {
+                useDefaultCb.checked = true;
+                _applyDefaultConfig(div);
+              }
+            }
+          }
+
           validateStage2();
         });
 
+        // Refresh channels
+        div.querySelectorAll(".refresh-channels-btn").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            btn.textContent = "Refreshing…";
+            await fetchSlackChannels();
+            renderNotificationConfigs();
+          });
+        });
+
+        div.querySelectorAll(".channel-select").forEach(sel => sel.addEventListener("change", validateStage2));
+
         if (event === "issue_assigned") {
-          // Email/SMS master toggles
-          ["email", "sms"].forEach((type) => {
-            const masterToggle = configDiv.querySelector(`.${type}-enabled`);
-            const manualDiv = configDiv.querySelector(
-              `.${type}-priority-manual`,
-            );
-            const defaultToggle = configDiv.querySelector(
-              `.${type}-default-priority`,
-            );
-
-            if (masterToggle) {
-              masterToggle.addEventListener("change", (e) => {
-                // If master is off, hide priority options
-                if (!e.target.checked && manualDiv) {
-                  manualDiv.classList.add("hidden");
-                }
-                validateStage2();
-              });
-            }
-
-            if (defaultToggle && manualDiv) {
-              defaultToggle.addEventListener("change", (e) => {
-                // Toggle visibility of manual priority checkboxes
-                manualDiv.classList.toggle("hidden", e.target.checked);
-
-                // Auto-set priorities when default is checked
-                if (e.target.checked) {
-                  const checkboxes =
-                    manualDiv.querySelectorAll(".priority-checkbox");
-                  checkboxes.forEach((cb) => {
-                    const priority = cb.dataset.priority;
-                    if (type === "email") {
-                      cb.checked = priority === "medium" || priority === "high";
-                    } else if (type === "sms") {
-                      cb.checked = priority === "high";
-                    }
-                  });
-                }
-                validateStage2();
-              });
-            }
+          // Slack check → show/hide channel row
+          const slackCb = div.querySelector(".slack-enabled");
+          const channelRow = div.querySelector(".slack-channel-row");
+          slackCb?.addEventListener("change", e => {
+            channelRow?.classList.toggle("hidden", !e.target.checked);
+            _handleDefaultLogic(div);
+            validateStage2();
           });
 
-          // Slack channel validation
-          const slackChannel = configDiv.querySelector(".slack-channel");
-          if (slackChannel) {
-            slackChannel.addEventListener("input", validateStage2);
-          }
-        } else {
-          // Simple channel validation for non-assigned events
-          const channelInput = configDiv.querySelector(".channel-input");
-          if (channelInput) {
-            channelInput.addEventListener("input", validateStage2);
-          }
+          // Email main → dim/undim sub-checkboxes
+          const emailCb = div.querySelector(".email-enabled");
+          const emailPrioGroup = div.querySelectorAll('.prio-cb[data-type="email"]');
+          emailCb?.addEventListener("change", e => {
+            const prio = emailCb.closest(".p-4").querySelector(".prio-sub");
+            if (prio) prio.classList.toggle("dimmed", !e.target.checked);
+            if (!e.target.checked) emailPrioGroup.forEach(cb => cb.checked = false);
+            _handleDefaultLogic(div);
+            validateStage2();
+          });
+
+          // SMS main → dim/undim sub-checkboxes
+          const smsCb = div.querySelector(".sms-enabled");
+          const smsPrioGroup = div.querySelectorAll('.prio-cb[data-type="sms"]');
+          smsCb?.addEventListener("change", e => {
+            const prio = smsCb.closest(".p-4").querySelector(".prio-sub");
+            if (prio) prio.classList.toggle("dimmed", !e.target.checked);
+            if (!e.target.checked) smsPrioGroup.forEach(cb => cb.checked = false);
+            _handleDefaultLogic(div);
+            validateStage2();
+          });
+
+          // Priority sub-checkboxes → uncheck "default"
+          div.querySelectorAll(".prio-cb").forEach(cb => {
+            cb.addEventListener("change", () => {
+              _handleDefaultLogic(div);
+              validateStage2();
+            });
+          });
+
+          // "Use Default" checkbox → apply recommended config
+          const useDefaultCb = div.querySelector(".use-default");
+          useDefaultCb?.addEventListener("change", e => {
+            if (e.target.checked) {
+              _applyDefaultConfig(div);
+            }
+            validateStage2();
+          });
         }
 
-        // Priority checkboxes validation
-        configDiv.querySelectorAll(".priority-checkbox").forEach((cb) => {
-          cb.addEventListener("change", validateStage2);
+        div.querySelectorAll(".slack-enabled, .email-enabled, .sms-enabled").forEach(cb => {
+          // already handled above for assigned; generic validation for others
+          if (event !== "issue_assigned") cb.addEventListener("change", validateStage2);
         });
       }
 
+      // Apply recommended default config to issue_assigned
+      // DEFAULT = Slack DM ON, Email ON (Medium+High), SMS ON (High only)
+      // This ALWAYS resets to defaults no matter what the current selections are.
+      function _applyDefaultConfig(div) {
+        const slackCb    = div.querySelector(".slack-enabled");
+        const emailCb    = div.querySelector(".email-enabled");
+        const smsCb      = div.querySelector(".sms-enabled");
+        const channelRow = div.querySelector(".slack-channel-row");
+
+        // Slack: ON — show channel row
+        if (slackCb) slackCb.checked = true;
+        if (channelRow) channelRow.classList.remove("hidden");
+
+        // Email: ON — undim priority sub, set Medium+High, uncheck Low
+        if (emailCb) emailCb.checked = true;
+        const emailPrioBlock = emailCb?.closest(".p-4")?.querySelector(".prio-sub");
+        if (emailPrioBlock) emailPrioBlock.classList.remove("dimmed");
+        div.querySelectorAll('.prio-cb[data-type="email"]').forEach(cb => {
+          cb.checked = (cb.dataset.prio === "medium" || cb.dataset.prio === "high");
+        });
+
+        // SMS: ON — undim priority sub, set High only, uncheck Low+Medium
+        if (smsCb) smsCb.checked = true;
+        const smsPrioBlock = smsCb?.closest(".p-4")?.querySelector(".prio-sub");
+        if (smsPrioBlock) smsPrioBlock.classList.remove("dimmed");
+        div.querySelectorAll('.prio-cb[data-type="sms"]').forEach(cb => {
+          cb.checked = (cb.dataset.prio === "high");
+        });
+      }
+
+      // Uncheck "Default" if user manually changed anything
+      function _handleDefaultLogic(div) {
+        const useDefaultCb = div.querySelector(".use-default");
+        if (!useDefaultCb) return;
+        // If anything deviates from the default config, uncheck it
+        useDefaultCb.checked = false;
+      }
+
+      // ===== SAVE STAGE 2 STATE =====
+      function saveStage2State() {
+        state.selectedEvents.forEach(event => {
+          const div    = document.querySelector(`.event-config[data-event="${event}"]`);
+          const toggle = document.querySelector(`.event-toggle[data-event="${event}"]`);
+          if (!div) return;
+          const enabled = toggle?.checked || false;
+
+          if (event === "issue_assigned") {
+            const slackEnabled  = div.querySelector(".slack-enabled")?.checked  || false;
+            const emailEnabled  = div.querySelector(".email-enabled")?.checked  || false;
+            const smsEnabled    = div.querySelector(".sms-enabled")?.checked    || false;
+            const useDefault    = div.querySelector(".use-default")?.checked    || false;
+            const channelSel    = div.querySelector(".channel-select");
+
+            const emailPrios = {}, smsPrios = {};
+            div.querySelectorAll('.prio-cb[data-type="email"]').forEach(cb => emailPrios[cb.dataset.prio] = cb.checked);
+            div.querySelectorAll('.prio-cb[data-type="sms"]').forEach(cb  => smsPrios[cb.dataset.prio]  = cb.checked);
+
+            state.notifications[event] = {
+              enabled,
+              useDefaultPriority: useDefault,
+              slack:  { enabled: slackEnabled, channelId: channelSel?.value || "",  channelName: channelSel?.options[channelSel.selectedIndex]?.text || "" },
+              email:  { enabled: emailEnabled, priorities: emailPrios },
+              sms:    { enabled: smsEnabled,   priorities: smsPrios },
+            };
+          } else {
+            const channelSel = div.querySelector(".channel-select");
+            state.notifications[event] = {
+              enabled,
+              channelId:   channelSel?.value || "",
+              channelName: channelSel?.options[channelSel?.selectedIndex]?.text || "",
+            };
+          }
+        });
+      }
+
+      // ===== STAGE 2 VALIDATION =====
       function validateStage2() {
-        let isValid = true;
-        let errorMessage = null;
+        let valid  = true;
+        let errMsg = null;
+        const errEl = document.getElementById("stage2Error");
 
-        state.selectedEvents.forEach((event) => {
-          const configDiv = document.querySelector(
-            `.event-config-content[data-event="${event}"]`,
-          );
-          if (!configDiv) return;
+        state.selectedEvents.forEach(event => {
+          const toggle = document.querySelector(`.event-toggle[data-event="${event}"]`);
+          if (!toggle?.checked) return;
 
-          const isEnabled = document.querySelector(
-            `.event-enabled-toggle[data-event="${event}"]`,
-          )?.checked;
+          const div = document.querySelector(`.event-config[data-event="${event}"]`);
+          if (!div) return;
 
-          if (isEnabled) {
-            if (event === "issue_assigned") {
-              // Validate Slack channel format if provided
-              const slackChannel = configDiv.querySelector(".slack-channel");
-              if (slackChannel?.value && !slackChannel.validity.valid) {
-                isValid = false;
-                errorMessage =
-                  "Slack channel link must be a valid URL (e.g., https://xxx.slack.com/archives/C123)";
-                slackChannel.classList.add("border-red-500");
-              } else if (slackChannel) {
-                slackChannel.classList.remove("border-red-500");
-              }
-
-              // Validate Email/SMS: if enabled, at least one priority must be selected
-              ["email", "sms"].forEach((type) => {
-                const enabled = configDiv.querySelector(
-                  `.${type}-enabled`,
-                )?.checked;
-                const useDefault = configDiv.querySelector(
-                  `.${type}-default-priority`,
-                )?.checked;
-                const manualDiv = configDiv.querySelector(
-                  `.${type}-priority-manual`,
-                );
-
-                if (enabled && !useDefault && manualDiv) {
-                  const checked = manualDiv.querySelectorAll(
-                    ".priority-checkbox:checked",
-                  );
-                  if (checked.length === 0) {
-                    isValid = false;
-                    errorMessage = `Please select at least one priority for ${type} notifications`;
-                  }
-                }
-              });
-            } else {
-              // Validate channel link for non-assigned events
-              const channelInput = configDiv.querySelector(".channel-input");
-              if (channelInput?.value && !channelInput.validity.valid) {
-                isValid = false;
-                errorMessage = "Slack channel link must be a valid URL";
-                channelInput.classList.add("border-red-500");
-              } else if (channelInput) {
-                channelInput.classList.remove("border-red-500");
-              }
+          if (event === "issue_assigned") {
+            const slack = div.querySelector(".slack-enabled")?.checked;
+            const email = div.querySelector(".email-enabled")?.checked;
+            const sms   = div.querySelector(".sms-enabled")?.checked;
+            if (!slack && !email && !sms) { valid = false; errMsg = "Please enable at least one notification method (Slack, Email, or SMS) for 'Issue Assigned'."; }
+          } else {
+            if (state.slackConnected) {
+              const sel = div.querySelector(".channel-select");
+              if (!sel?.value) { valid = false; errMsg = `Please select a Slack channel for "${event.replace(/_/g, " ")}".`; }
             }
           }
         });
 
-        // Show/hide error message
-        const errorEl = document.getElementById("stage2Error");
-        if (errorEl) {
-          if (errorMessage) {
-            errorEl.textContent = errorMessage;
-            errorEl.classList.remove("hidden");
-          } else {
-            errorEl.classList.add("hidden");
-          }
-        }
-
-        // Enable/disable next button
-        const nextBtn = document.getElementById("nextStage2");
-        if (nextBtn) {
-          nextBtn.disabled = !isValid;
-        }
-
-        return isValid;
+        if (errEl) { errEl.textContent = errMsg || ""; errEl.classList.toggle("hidden", !errMsg); }
+        document.getElementById("nextStage2").disabled = !valid;
+        return valid;
       }
 
-      // ===== STAGE 3 VALIDATION =====
-      function validateStage3() {
-        const autoBranchEnabled =
-          document.getElementById("autoBranchToggle").checked;
-        const repoUrl = elements.githubRepoUrl.value;
+      // ===== CHECK CONTACT INFO =====
+      function validateAndCheckContactInfo() {
+        if (!validateStage2()) return false;
+        saveStage2State();
 
-        if (autoBranchEnabled) {
-          if (!elements.githubRepoUrl.validity.valid) {
-            elements.githubRepoUrl.classList.add("border-red-500");
-            document.getElementById("saveWorkflowBtnStage3").disabled = true;
-            return false;
-          } else {
-            elements.githubRepoUrl.classList.remove("border-red-500");
-          }
+        const usesSlack = Object.values(state.notifications).some(n => {
+          if (!n.enabled) return false;
+          return n.slack?.enabled || !!n.channelId;
+        });
+        if (usesSlack && !state.userSlackId) {
+          document.getElementById("slackIdModal").classList.remove("hidden");
+          return false;
         }
 
-        document.getElementById("saveWorkflowBtnStage3").disabled = false;
+        const usesSms = Object.values(state.notifications).some(n => n.enabled && n.sms?.enabled);
+        if (usesSms && !state.userMobile) {
+          document.getElementById("mobileModal").classList.remove("hidden");
+          return false;
+        }
+
         return true;
       }
 
-      // ===== WORKFLOW SAVING =====
+      // ===== SAVE SLACK ID =====
+      async function saveSlackId() {
+        const val = document.getElementById("slackIdInput").value.trim();
+        if (!val) { alert("Please enter your Slack Member ID (starts with U)."); return; }
+        if (!val.startsWith("U")) {
+          document.getElementById("slackIdError").classList.remove("hidden");
+          alert("Slack Member ID must start with 'U'.\n\nTo find it: click your name in Slack → ⋯ → View full profile → ⋯ near View As → Copy Member ID");
+          return;
+        }
+        document.getElementById("slackIdError").classList.add("hidden");
+        try {
+          await axios.put("/api/admin/members/contact", { slackUserId: val }, { headers: { "X-Project-Key": state.projectKey } });
+          state.userSlackId = val;
+          document.getElementById("slackIdModal").classList.add("hidden");
+          if (validateAndCheckContactInfo()) goToStage(3);
+        } catch (e) { alert("Failed to save Slack ID: " + e.message); }
+      }
+
+      // ===== SAVE MOBILE =====
+      async function saveMobile() {
+        const val = document.getElementById("mobileInput").value.trim();
+        if (!val) { alert("Please enter your mobile number."); return; }
+        try {
+          await axios.put("/api/admin/members/contact", { phoneNumber: val }, { headers: { "X-Project-Key": state.projectKey } });
+          state.userMobile = val;
+          document.getElementById("mobileModal").classList.add("hidden");
+          if (validateAndCheckContactInfo()) goToStage(3);
+        } catch (e) { alert("Failed to save mobile number: " + e.message); }
+      }
+
+      // ===== SAVE WORKFLOW =====
       async function saveWorkflow() {
-        // Collect form data
+        if (state.currentStage === 2) saveStage2State();
+
+        // Validate workflow name
+        const workflowName = document.getElementById("workflowNameInput")?.value.trim();
+        if (!workflowName) {
+          alert("Please enter a name for your workflow.");
+          document.getElementById("workflowNameInput").focus();
+          return;
+        }
+
+        // Validate GitHub repo if auto-branch is on
+        const autoBranchEnabled = document.getElementById("autoBranchToggle")?.checked;
+        const repoUrl = state.projectGithubRepoUrl || el.githubRepoUrl.value.trim();
+        if (autoBranchEnabled && !repoUrl) {
+          alert("Please enter a GitHub Repository URL to enable auto-branch creation.");
+          el.githubRepoUrl.focus();
+          return;
+        }
+
+        const notifications = {};
+        state.selectedEvents.forEach(event => {
+          const n = state.notifications[event] || {};
+          if (event === "issue_assigned") {
+            notifications[event] = {
+              enabled:           n.enabled !== false,
+              useDefaultPriority: n.useDefaultPriority || false,
+              slack:  { enabled: n.slack?.enabled  || false, channelId: n.slack?.channelId  || null, channelName: n.slack?.channelName  || null },
+              email:  { enabled: n.email?.enabled  || false, priorities: n.email?.priorities || { low: false, medium: false, high: false } },
+              sms:    { enabled: n.sms?.enabled    || false, priorities: n.sms?.priorities   || { low: false, medium: false, high: false } },
+            };
+          } else {
+            notifications[event] = {
+              enabled:     n.enabled !== false,
+              channelId:   n.channelId   || null,
+              channelName: n.channelName || null,
+            };
+          }
+        });
+
         const workflowData = {
-          projectId: state.projectKey,
-          name: `Workflow for ${state.selectedEvents.join(", ")}`,
+          name: workflowName,
           trigger: { events: state.selectedEvents },
-          notifications: collectNotificationConfigs(),
+          notifications,
           enhancements: {
-            aiSuggestions:
-              document.getElementById("aiSuggestionsToggle")?.checked || false,
-            autoBranch: {
-              enabled:
-                document.getElementById("autoBranchToggle")?.checked || false,
-              repoUrl: elements.githubRepoUrl.value || null,
-            },
+            aiSolutions: document.getElementById("aiSolutionsToggle")?.checked || false,
+            autoBranch: { enabled: autoBranchEnabled || false, repoUrl: repoUrl || null },
           },
         };
 
         try {
-          // In real app: POST to backend
-          // For demo: simulate API call
-          elements.saveWorkflowBtnStage3.disabled = true;
-          elements.saveWorkflowBtnStage3.innerHTML = "Saving...";
+          el.saveWorkflowBtnStage3.disabled = true;
+          el.saveWorkflowBtnStage3.innerHTML = "Saving…";
 
-          // ✅ REAL: Save workflow to Firestore via backend
-          const saveRes = await axios.post("/api/workflows", workflowData, {
-            headers: {
-              "X-Project-Key": state.projectKey,
-              "Content-Type": "application/json",
-            },
+          const res = await axios.post("/api/workflows", workflowData, {
+            headers: { "X-Project-Key": state.projectKey, "Content-Type": "application/json" },
           });
 
-          if (!saveRes.data?.success) {
-            throw new Error(saveRes.data?.error || "Save failed");
+          if (!res.data?.success) throw new Error(res.data?.error || "Save failed");
+
+          // SUCCESS — refresh event locks
+          await fetchExistingWorkflows();
+
+          // If auto-branch was enabled with a NEW repo URL, save it
+          if (autoBranchEnabled && repoUrl && !state.projectGithubRepoUrl) {
+            try {
+              await axios.put("/api/admin/integrations/github", { repoUrl }, {
+                headers: { "X-Project-Key": state.projectKey },
+              });
+              state.projectGithubRepoUrl = repoUrl;
+            } catch (e) { console.warn("Could not save GitHub URL:", e.message); }
           }
 
-          // Show success
-          Object.values(elements.stages).forEach((el) =>
-            el.classList.remove("active"),
-          );
-          elements.successMessage.classList.remove("hidden");
-          console.log("✅ Workflow saved to Firestore:", saveRes.data.data.id);
+          // If AI solutions enabled, save the GitHub repo for AI context (once per project)
+          const aiSolEnabled = document.getElementById("aiSolutionsToggle")?.checked;
+          const aiSolRepoInput = document.getElementById("aiSolutionRepoInput");
+          const aiSolRepoInputChange = document.getElementById("aiSolutionRepoInputChange");
+          const aiSolRepo = (aiSolRepoInputChange?.value?.trim() || aiSolRepoInput?.value?.trim());
+          if (aiSolEnabled && aiSolRepo) {
+            try {
+              await axios.put("/api/admin/integrations/github", { repoUrl: aiSolRepo }, {
+                headers: { "X-Project-Key": state.projectKey },
+              });
+              state.projectGithubRepoUrl = aiSolRepo;
+            } catch (e) { console.warn("Could not save AI solution repo:", e.message); }
+          }
 
-          // Show success
-          Object.values(elements.stages).forEach((el) =>
-            el.classList.remove("active"),
-          );
-          elements.successMessage.classList.remove("hidden");
+          Object.values(el.stages).forEach(s => s.classList.remove("active"));
+          el.successMessage.classList.remove("hidden");
+          el.duplicateAlert.classList.add("hidden");
+          state.editingWorkflowId = null;
 
-          // In real app: redirect or refresh
-          console.log("Workflow saved:", workflowData);
+          // Auto-redirect to unified-dashboard after 5 seconds
+          let count = 5;
+          const countEl = document.getElementById("countdownNum");
+          const timer = setInterval(() => {
+            count--;
+            if (countEl) countEl.textContent = count;
+            if (count <= 0) {
+              clearInterval(timer);
+              window.location.href = "/bugsense";
+            }
+          }, 1000);
+
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "workflowSaved" }, "*");
+          }
         } catch (err) {
-          console.error("Save failed:", err);
-          alert("Failed to save workflow. Please try again.");
-          elements.saveWorkflowBtnStage3.disabled = false;
-          elements.saveWorkflowBtnStage3.textContent =
-            "✓ Save & Activate Workflow";
-        }
-      }
-
-      function collectNotificationConfigs() {
-        const configs = {};
-
-        state.selectedEvents.forEach((event) => {
-          if (event === "issue_assigned") {
-            const useDefault = document.getElementById(
-              `defaultPriority_issue_assigned`,
-            ).checked;
-
-            configs[event] = {
-              useDefaultPriority: useDefault,
-              slack: {
-                enabled: true, // Always enabled per spec
-                channelLink:
-                  document.querySelector(
-                    `[data-event="issue_assigned"] input[type="url"]`,
-                  )?.value || null,
-              },
-              email: {
-                enabled:
-                  document.getElementById(`email_enabled_issue_assigned`)
-                    ?.checked || false,
-                priorities: {
-                  low:
-                    document.querySelector(
-                      `#priorityConfig_issue_assigned [value="low"]`,
-                    )?.checked || false,
-                  medium:
-                    document.querySelector(
-                      `#priorityConfig_issue_assigned [value="medium"]`,
-                    )?.checked || false,
-                  high:
-                    document.querySelector(
-                      `#priorityConfig_issue_assigned [value="high"]`,
-                    )?.checked || false,
-                },
-              },
-              sms: {
-                enabled:
-                  document.getElementById(`sms_enabled_issue_assigned`)
-                    ?.checked || false,
-                priorities: {
-                  low:
-                    document.querySelector(
-                      `#priorityConfig_issue_assigned [value="low"] + label input`,
-                    )?.checked || false,
-                  medium:
-                    document.querySelector(
-                      `#priorityConfig_issue_assigned [value="medium"] + label input`,
-                    )?.checked || false,
-                  high:
-                    document.querySelector(
-                      `#priorityConfig_issue_assigned [value="high"] + label input`,
-                    )?.checked || false,
-                },
-              },
+          if (err.response?.status === 409 && err.response?.data?.existingWorkflowId) {
+            const d = err.response.data;
+            Object.values(el.stages).forEach(s => s.classList.remove("active"));
+            el.duplicateAlert.classList.remove("hidden");
+            document.getElementById("duplicateMessage").textContent =
+              `The event "${d.conflict?.replace(/_/g, " ")}" is already handled by the workflow "${d.existingWorkflow?.name || "an existing workflow"}". Would you like to edit that workflow instead?`;
+            document.getElementById("editExistingBtn").onclick = () => {
+              el.duplicateAlert.classList.add("hidden");
+              startEditWorkflow(d.existingWorkflowId, d.existingWorkflow?.name || "Workflow");
             };
           } else {
-            const channelInput = document.querySelector(
-              `[data-event="${event}"] input[type="url"]`,
-            );
-            configs[event] = {
-              channelLink: channelInput?.value || null,
-            };
+            const detail = err.response?.data?.error || err.response?.data?.details || err.message;
+            alert(`Failed to save workflow: ${detail}`);
           }
-        });
 
-        return configs;
-      }
-
-      // ===== UTILITIES =====
-      // ✅ REAL: Fetch workflows from Firestore via backend
-      async function fetchExistingWorkflows() {
-        try {
-          const response = await axios.get("/api/workflows", {
-            headers: { "X-Project-Key": state.projectKey },
-          });
-
-          if (response.data?.success && Array.isArray(response.data.data)) {
-            const existingEvents = response.data.data
-              .filter((w) => w.isActive)
-              .flatMap((w) => w.trigger?.events || []);
-
-            document
-              .querySelectorAll('input[name="event"]')
-              .forEach((checkbox) => {
-                if (existingEvents.includes(checkbox.value)) {
-                  checkbox.disabled = true;
-                  checkbox.parentElement.title = `A workflow already uses "${checkbox.nextElementSibling.textContent.trim()}". Edit that workflow instead.`;
-                  checkbox.parentElement.classList.add(
-                    "opacity-60",
-                    "cursor-not-allowed",
-                  );
-                }
-              });
-          }
-        } catch (error) {
-          console.warn("Could not fetch workflows:", error.message);
-          // Fail open: allow user to proceed
+          el.saveWorkflowBtnStage3.disabled  = false;
+          el.saveWorkflowBtnStage3.textContent = "✓ Save & Activate Workflow";
         }
       }
 
+      // ===== RESET =====
       function resetForm() {
-        // Clear selections
-        document
-          .querySelectorAll('input[name="event"]:checked')
-          .forEach((cb) => (cb.checked = false));
+        document.querySelectorAll('input[name="event"]').forEach(cb => { cb.checked = false; cb.disabled = false; });
+        document.querySelectorAll('label[data-event]').forEach(l => { l.classList.remove("event-locked"); l.querySelector(".event-locked-banner")?.remove(); });
         state.selectedEvents = [];
-
-        // Reset stages
-        goToStage(1);
+        state.notifications  = {};
+        el.notifConfigs.innerHTML = "";
+        document.getElementById("aiSolutionsToggle").checked    = false;
+        document.getElementById("autoBranchToggle").checked     = false;
+        document.getElementById("workflowNameInput").value      = "";
+        el.githubRepoInput.classList.add("hidden");
+        el.githubRepoStored.classList.add("hidden");
+        el.githubRepoUrl.value = "";
         validateStage1();
+        renderEventLocks(); // re-apply locks for remaining workflows
       }
-      // ✅ REAL: Check if Slack workspace is connected for this project
-      async function checkSlackIntegration() {
-        try {
-          const response = await axios.get("/api/admin/integrations");
-          const { slack } = response.data;
-
-          const banner = document.getElementById("slackIntegrationBanner");
-          if (banner) {
-            if (!slack?.teamId) {
-              // Not connected: show banner
-              banner.classList.remove("hidden");
-            } else {
-              // Connected: hide banner, store team info
-              banner.classList.add("hidden");
-              state.slackTeamId = slack.teamId;
-              state.confirmedChannels = slack.confirmedChannels || [];
-            }
-          }
-        } catch (error) {
-          console.warn("Could not check Slack integration:", error.message);
-        }
-      }
-
-      // ===== REAL APP INTEGRATION NOTES =====
-      /*
-    To connect this frontend to your backend:
-    
-    1. Replace mock session data with real fetch:
-       axios.get('/api/session')
-         .then(res => { state.user = res.data; ... })
-    
-    2. In saveWorkflow():
-       await axios.post('/api/workflows', workflowData, {
-         headers: { 'X-CSRF-Token': getCsrfToken() }
-       });
-    
-    3. In fetchExistingWorkflows():
-       const res = await axios.get('/api/workflows?projectId=' + state.projectKey);
-       const existingEvents = res.data.map(w => w.trigger.events).flat();
-    
-    4. Add CSRF protection middleware in Express:
-       const csrf = require('csurf');
-       app.use(csrf({ cookie: true }));
-    
-    5. For webhook signature verification (critical for security):
-       // routes/webhooks/jira.js
-       const crypto = require('crypto');
-       const verifyJiraWebhook = (req, res, buf) => {
-         const signature = req.headers['x-atlassian-webhook-signature'];
-         const expected = crypto
-           .createHmac('sha256', process.env.JIRA_WEBHOOK_SECRET)
-           .update(buf)
-           .digest('base64');
-         if (signature !== expected) throw new Error('Invalid signature');
-       };
-    */
     </script>
   </body>
 </html>

@@ -1,0 +1,1738 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Dashboard | Agentic Workflow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/axios.min.js?v=2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+      }
+      .sidebar-link {
+        transition: all 0.15s ease;
+      }
+      .sidebar-link:hover,
+      .sidebar-link.active {
+        background: rgba(99, 102, 241, 0.1);
+        color: #4f46e5;
+      }
+      .sidebar-link.active {
+        border-right: 3px solid #4f46e5;
+      }
+      .workflow-card {
+        transition: all 0.2s ease;
+      }
+      .workflow-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .fade-in {
+        animation: fadeIn 0.3s ease;
+      }
+      .content-section {
+        display: none;
+      }
+      .content-section.active {
+        display: block;
+      }
+      /* AI Chat section needs flex layout */
+      #section-create.active {
+        display: flex;
+        flex-direction: column;
+      }
+      @keyframes wf-bounce {
+        0%, 100% { transform: translateY(0); opacity: .5; }
+        50%       { transform: translateY(-5px); opacity: 1; }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <!-- Top Nav -->
+    <nav
+      class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm"
+        >
+          AW
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-gray-900">Agentic Workflow</h1>
+          <p class="text-xs text-gray-500">
+            Project: <strong id="topProjectKey">...</strong> ·
+            <span id="topUserRole" class="text-indigo-600">Loading...</span>
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-gray-600" id="topUserName">Loading...</span>
+        <a
+          href="/login"
+          class="text-xs text-red-500 hover:text-red-700 font-medium"
+          >Logout</a
+        >
+      </div>
+    </nav>
+
+    <div class="flex min-h-[calc(100vh-57px)]">
+      <!-- Sidebar -->
+      <aside class="w-64 bg-white border-r border-gray-200 py-6 flex flex-col">
+        <div class="px-4 mb-6">
+          <span
+            class="text-xs font-semibold text-gray-400 uppercase tracking-wider"
+            >Navigation</span
+          >
+        </div>
+        <nav class="flex-1 space-y-1 px-2">
+          <a
+            href="#"
+            data-section="workflows"
+            class="sidebar-link active flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700"
+          >
+            <span>📋</span> Current Workflows
+          </a>
+          <a
+            href="#"
+            data-section="bugsense"
+            class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700"
+          >
+            <span>🐛</span> BugSense
+          </a>
+          <a
+            href="#"
+            data-section="create"
+            class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700"
+          >
+            <span>➕</span> Create Workflow
+          </a>
+          <a
+            href="#"
+            data-section="settings"
+            class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700"
+          >
+            <span>⚙️</span> Settings
+          </a>
+          <a
+            href="#"
+            data-section="profile"
+            class="sidebar-link flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700"
+          >
+            <span>👤</span> My Profile
+          </a>
+          <a
+            href="#"
+            data-section="report"
+            id="reportNavLink"
+            class="sidebar-link hidden flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-gray-700"
+          >
+            <span>📊</span> Generate Report
+          </a>
+        </nav>
+        <div class="px-4 mt-auto pt-4 border-t border-gray-200">
+          <p class="text-xs text-gray-400">Jira-MCP-Test Bot v1.0</p>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="flex-1 p-8 overflow-y-auto">
+        <!-- Section: Current Workflows -->
+        <div id="section-workflows" class="content-section active fade-in">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h2 class="text-2xl font-bold text-gray-900">Active Workflows</h2>
+              <p class="text-gray-500 text-sm mt-1">
+                All workflows configured for this project
+              </p>
+            </div>
+            <button
+              id="newWorkflowBtn"
+              class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow transition"
+            >
+              + New Workflow
+            </button>
+          </div>
+          <div id="workflowsList" class="space-y-4">
+            <div class="text-center text-gray-400 py-12">
+              <p class="text-4xl mb-3">📭</p>
+              <p class="font-medium">Loading workflows...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: BugSense -->
+        <div id="section-bugsense" class="content-section fade-in">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-gray-900">BugSense</h2>
+          </div>
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <iframe id="bugsenseFrame" src="/bugsense" class="w-full border-0" style="height: calc(100vh - 180px)" loading="lazy"></iframe>
+          </div>
+        </div>
+
+        <!-- Section: Create Workflow (AI Chat) -->
+        <div id="section-create" class="content-section fade-in" style="height:calc(100vh - 57px);overflow:hidden;">
+          <!-- Blue AI chat header bar -->
+          <div style="flex-shrink:0;padding:12px 24px;background:#fff;border-bottom:1.5px solid #d1d9f0;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(37,99,235,.06);">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#2563eb,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 8px rgba(37,99,235,.25);">🤖</div>
+              <div>
+                <div style="font-size:15px;font-weight:800;color:#0f172a;line-height:1;">Workflow AI</div>
+                <div style="font-size:11px;color:#2563eb;margin-top:2px;font-weight:600;">Powered by LangGraph + Gemini</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span id="wf-edit-badge" style="display:none;background:#dbeafe;border:1.5px solid #93c5fd;color:#2563eb;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;">✏️ Edit Mode</span>
+              <button
+                id="backToWorkflowsBtn"
+                style="padding:6px 14px;border:1.5px solid #d1d9f0;border-radius:8px;background:transparent;color:#94a3b8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;"
+                onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb'"
+                onmouseout="this.style.borderColor='#d1d9f0';this.style.color='#94a3b8'"
+              >← Back</button>
+            </div>
+          </div>
+          <!-- Chat area fills remaining height -->
+          <div
+            id="ai-chat-container"
+            style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#f8faff;"
+          >
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <div style="text-align:center;color:#94a3b8;">
+                <div style="font-size:40px;margin-bottom:12px;">🤖</div>
+                <div style="font-size:14px;">Loading AI chat...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Settings -->
+        <div id="section-settings" class="content-section fade-in">
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">
+            Project Settings
+          </h2>
+          <p class="text-gray-500 text-sm mb-6">
+            Feature preferences & integrations (shared across all admins)
+          </p>
+
+          <div
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl mb-6"
+          >
+            <h3 class="font-semibold text-gray-900 mb-4">
+              Feature Utilization
+            </h3>
+            <div class="space-y-4">
+              <!-- 1. AI-Powered Assignee Suggestions (CLICKABLE) -->
+              <label
+                class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-blue-50 transition"
+              >
+                <input
+                  type="checkbox"
+                  id="settingsAiAssignee"
+                  class="mt-1 h-4 w-4 text-blue-600 rounded"
+                />
+                <div class="ml-3">
+                  <span class="font-medium text-gray-900"
+                    >🤖 AI-Powered Assignee Suggestions</span
+                  >
+                  <p class="text-sm text-gray-500">
+                    AI analyses your team's workload and skill history to
+                    suggest the best person for each issue.
+                  </p>
+                </div>
+              </label>
+
+              <!-- 2. Report Generation (CLICKABLE) -->
+              <label
+                class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-blue-50 transition"
+              >
+                <input
+                  type="checkbox"
+                  id="settingsReportGen"
+                  class="mt-1 h-4 w-4 text-blue-600 rounded"
+                />
+                <div class="ml-3">
+                  <span class="font-medium text-gray-900"
+                    >📊 Report Generation</span
+                  >
+                  <p class="text-sm text-gray-500">
+                    Generate analytics on bug frequency, resolution times, and
+                    team performance on demand.
+                  </p>
+                </div>
+              </label>
+
+              <!-- 3. AI-Suggested Solutions (NON-CLICKABLE — auto-managed by workflows) -->
+              <div class="p-3 border rounded-lg bg-gray-50">
+                <div class="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="settingsAiSolStatus"
+                    class="mt-1 h-4 w-4 text-blue-600 rounded opacity-60 cursor-not-allowed"
+                    disabled
+                  />
+                  <div class="ml-1 flex-1">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-gray-700"
+                        >💡 AI-Suggested Solutions</span
+                      >
+                      <span
+                        class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 font-medium"
+                        >Auto-managed</span
+                      >
+                    </div>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                      When a bug is assigned, AI analyses it and includes
+                      potential fix suggestions in the notification sent to the
+                      assignee.
+                    </p>
+                    <!-- Active -->
+                    <div
+                      id="aiSolStatusActive"
+                      class="hidden mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2"
+                    >
+                      ✅ Active in workflow:
+                      <strong id="aiSolWorkflowName">—</strong>
+                    </div>
+                    <!-- Instructions when inactive -->
+                    <div
+                      id="aiSolStatusInactive"
+                      class="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+                    >
+                      <p class="font-medium mb-1">
+                        ℹ️ This feature is managed through workflows
+                      </p>
+                      <p>To enable it, create or edit a workflow:</p>
+                      <ol
+                        class="list-decimal list-inside mt-1 space-y-0.5 text-amber-700"
+                      >
+                        <li>
+                          In <strong>Stage 1</strong>, select the
+                          <strong>“Issue Assigned”</strong> trigger event
+                        </li>
+                        <li>
+                          In <strong>Stage 2</strong>, enable at least one
+                          notification method for it
+                        </li>
+                        <li>
+                          In <strong>Stage 3</strong>, check the
+                          <strong>“AI-Suggested Solutions”</strong> enhancement
+                        </li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4. Sentry Bug Auto-Creation (CLICKABLE with setup flow) -->
+              <div class="p-3 border rounded-lg">
+                <label class="flex items-start cursor-pointer gap-2">
+                  <input
+                    type="checkbox"
+                    id="settingsSentry"
+                    class="mt-1 h-4 w-4 text-blue-600 rounded"
+                  />
+                  <div class="flex-1">
+                    <span class="font-medium text-gray-900"
+                      >🐛 Sentry Bug Auto-Creation</span
+                    >
+                    <p class="text-sm text-gray-500 mt-0.5">
+                      Automatically create Jira issues when Sentry detects
+                      errors in your application.
+                    </p>
+
+                    <!-- Setup steps (shown when checkbox checked, not yet activated) -->
+                    <div
+                      id="sentrySetup"
+                      class="hidden mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg"
+                    >
+                      <p class="text-sm font-semibold text-blue-900 mb-2">
+                        📋 Setup Instructions
+                      </p>
+
+                      <!-- Step 1: Jira API Token -->
+                      <div class="mb-3 p-3 bg-white border border-blue-200 rounded-lg">
+                        <p class="text-xs font-semibold text-blue-900 mb-1">Step 1: Save your Jira API Token</p>
+                        <p class="text-xs text-blue-700 mb-2">
+                          Sentry webhooks run without a login session, so we need your Jira API token to create issues automatically.
+                          <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" class="underline font-medium">Generate one here →</a>
+                        </p>
+                        <div class="flex gap-2">
+                          <input type="password" id="sentryJiraToken" placeholder="Paste your Jira API token"
+                            class="flex-1 px-3 py-1.5 border border-blue-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500" />
+                          <button type="button" id="saveSentryTokenBtn"
+                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition whitespace-nowrap">
+                            Save Token
+                          </button>
+                        </div>
+                        <p id="sentryTokenSaved" class="hidden text-xs text-green-700 mt-1">✅ Token saved successfully</p>
+                      </div>
+
+                      <p class="text-xs font-semibold text-blue-900 mb-1">Step 2: Add this webhook URL to Sentry</p>
+                      <p class="text-xs text-blue-800 mb-2">
+                        Paste this URL in your Sentry project's webhook settings:
+                      </p>
+                      <div class="flex items-center gap-2 mb-3">
+                        <code
+                          id="sentryWebhookUrl"
+                          class="flex-1 text-xs bg-white border border-blue-300 rounded px-3 py-2 font-mono break-all select-all"
+                          >Loading...</code
+                        >
+                        <button
+                          type="button"
+                          id="copySentryUrl"
+                          class="shrink-0 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg font-medium transition"
+                        >
+                          📋 Copy
+                        </button>
+                      </div>
+                      <div class="text-xs text-blue-800 space-y-1.5">
+                        <p class="font-semibold">
+                          Steps to configure in Sentry:
+                        </p>
+                        <ol
+                          class="list-decimal list-inside space-y-1 text-blue-700"
+                        >
+                          <li>
+                            Go to <strong>Sentry Dashboard</strong> →
+                            <strong>Settings</strong> →
+                            <strong>Developer Settings</strong>
+                          </li>
+                          <li>
+                            Click <strong>“Create New Integration”</strong> →
+                            select <strong>“Internal Integration”</strong>
+                          </li>
+                          <li>
+                            Name it <strong>“Jira Workflow Bot”</strong> (or any
+                            name)
+                          </li>
+                          <li>
+                            Under <strong>Webhooks</strong>, paste the URL above
+                          </li>
+                          <li>
+                            Under <strong>Permissions</strong>, grant
+                            <strong>Issue &amp; Event → Read</strong> access
+                          </li>
+                          <li>
+                            Enable <strong>issue</strong> alerts under Webhooks
+                          </li>
+                          <li>
+                            Click <strong>Save</strong> in Sentry, then click
+                            <strong>“Done”</strong> below
+                          </li>
+                          <br />
+                          <strong
+                            >Note: issue will be created by our product:
+                            BugSense</strong
+                          >
+                        </ol>
+                      </div>
+                      <button
+                        type="button"
+                        id="sentryDoneBtn"
+                        class="mt-4 bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition w-full"
+                      >
+                        ✅ Done — I’ve added the webhook to Sentry
+                      </button>
+                    </div>
+
+                    <!-- Active status -->
+                    <div
+                      id="sentryActive"
+                      class="hidden mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2"
+                    >
+                      ✅ Sentry integration is active. Errors will automatically
+                      create Jira issues.<br />
+                      <span class="text-green-600"
+                        >Webhook:
+                        <code id="sentryActiveUrl" class="font-mono"
+                          >—</code
+                        ></span
+                      >
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <button
+              id="saveFeaturesBtn"
+              class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
+            >
+              Save Features
+            </button>
+            <span
+              id="featuresSaveStatus"
+              class="ml-3 text-sm text-green-600 hidden"
+              >✅ Saved!</span
+            >
+          </div>
+
+          <!-- Slack Integration -->
+          <div
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl mb-6"
+          >
+            <h3 class="font-semibold text-gray-900 mb-4">Slack Integration</h3>
+            <div id="slackNotConnected">
+              <p class="text-sm text-gray-500 mb-4">
+                Connect your Slack workspace to enable channel notifications.
+              </p>
+              <a
+                id="slackInstallBtn"
+                href="#"
+                class="inline-flex items-center gap-2 bg-[#4A154B] hover:bg-[#611f69] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition shadow"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path
+                    d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.124 2.521a2.528 2.528 0 0 1 2.52-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.52V8.834zm-1.271 0a2.528 2.528 0 0 1-2.521 2.521 2.528 2.528 0 0 1-2.521-2.521V2.522A2.528 2.528 0 0 1 15.166 0a2.528 2.528 0 0 1 2.521 2.522v6.312zm-2.521 10.124a2.528 2.528 0 0 1 2.521 2.52A2.528 2.528 0 0 1 15.166 24a2.528 2.528 0 0 1-2.521-2.522v-2.52h2.521zm0-1.271a2.528 2.528 0 0 1-2.521-2.521 2.528 2.528 0 0 1 2.521-2.521h6.312A2.528 2.528 0 0 1 24 15.166a2.528 2.528 0 0 1-2.522 2.521h-6.312z"
+                  />
+                </svg>
+                Connect Slack Workspace
+              </a>
+            </div>
+            <div id="slackConnected" class="hidden">
+              <div
+                class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-3"
+              >
+                <span class="text-green-600 text-lg">✅</span>
+                <div>
+                  <p class="font-medium text-green-800 text-sm">
+                    Connected to: <strong id="slackTeamName">-</strong>
+                  </p>
+                  <p class="text-xs text-green-600">
+                    <span id="slackChannelCount">0</span> channels available in
+                    workspace
+                  </p>
+                </div>
+              </div>
+              <a
+                id="slackReconnectBtn"
+                href="#"
+                class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                >↻ Reconnect / Change Workspace</a
+              >
+            </div>
+
+            <!-- Slack ID prompt after connecting workspace -->
+            <div
+              id="slackIdPrompt"
+              class="hidden mt-4 p-4 bg-blue-50 border border-blue-300 rounded-lg"
+            >
+              <p class="text-sm font-medium text-blue-900 mb-2">
+                🔗 Workspace connected! Enter your personal Slack User ID to
+                receive DM notifications.
+              </p>
+              <p class="text-xs text-blue-700 mb-1">
+                Your Slack ID is workspace-specific. To find it:
+              </p>
+              <ol
+                class="text-xs text-blue-700 mb-3 list-decimal list-inside space-y-0.5"
+              >
+                <li>Click your <strong>name</strong> in the Slack sidebar</li>
+                <li>Click <strong>More actions</strong> (⋯)</li>
+                <li>Click <strong>View full profile</strong></li>
+                <li>
+                  Click the <strong>three dots</strong> (⋯) near the "View As"
+                  button
+                </li>
+                <li>
+                  Click <strong>Copy Member ID</strong> — it starts with
+                  <code class="bg-blue-100 px-1 rounded">U</code>
+                </li>
+              </ol>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  id="slackIdAfterConnect"
+                  placeholder="U12345678"
+                  pattern="^U[A-Z0-9]+$"
+                  class="flex-1 px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  id="saveSlackIdAfterConnect"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  Save
+                </button>
+              </div>
+              <p id="slackIdSaveMsg" class="text-xs text-green-600 mt-2 hidden">
+                ✅ Slack ID saved!
+              </p>
+            </div>
+          </div>
+
+          <!-- GitHub Integration -->
+          <div
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl"
+          >
+            <h3 class="font-semibold text-gray-900 mb-4">GitHub Integration</h3>
+            <!-- Not connected -->
+            <div id="githubNotConnected">
+              <p class="text-sm text-gray-500 mb-4">
+                Add your GitHub repository URL to enable auto-branch creation
+                when issues are assigned.
+              </p>
+              <div class="p-3 border rounded-lg">
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Repository URL</label
+                >
+                <input
+                  type="url"
+                  id="settingsGithubRepo"
+                  placeholder="https://github.com/your-org/your-repo"
+                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+              <button
+                id="saveGithubBtn"
+                class="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
+              >
+                Save GitHub Settings
+              </button>
+              <span
+                id="githubSaveStatus"
+                class="ml-3 text-sm text-green-600 hidden"
+                >✅ Saved!</span
+              >
+            </div>
+            <!-- Connected -->
+            <div id="githubConnected" class="hidden">
+              <div
+                class="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-3"
+              >
+                <span class="text-green-600 text-lg">✅</span>
+                <div>
+                  <p class="font-medium text-green-800 text-sm">
+                    Repository connected
+                  </p>
+                  <p class="text-xs text-green-600">
+                    <a
+                      id="githubRepoLink"
+                      href="#"
+                      target="_blank"
+                      rel="noopener"
+                      class="underline hover:text-green-800"
+                    ></a>
+                  </p>
+                </div>
+              </div>
+              <button
+                id="changeGithubBtn"
+                class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                ↻ Change Repository
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: My Profile -->
+        <div id="section-profile" class="content-section fade-in">
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">My Profile</h2>
+          <p class="text-gray-500 text-sm mb-6">
+            Your personal contact info (used for notifications)
+          </p>
+
+          <div
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl"
+          >
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Display Name</label
+                >
+                <input
+                  type="text"
+                  id="profileName"
+                  class="w-full px-3 py-2 border rounded-lg bg-gray-50 text-sm"
+                  readonly
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Email</label
+                >
+                <input
+                  type="email"
+                  id="profileEmail"
+                  class="w-full px-3 py-2 border rounded-lg bg-gray-50 text-sm"
+                  readonly
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Slack User ID</label
+                >
+                <input
+                  type="text"
+                  id="profileSlackId"
+                  placeholder="U12345678"
+                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Must start with "U". Find this in Slack: click your name → ⋯ →
+                  View full profile → ⋯ near "View As" → Copy Member ID
+                </p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Mobile Number</label
+                >
+                <input
+                  type="tel"
+                  id="profileMobile"
+                  placeholder="+91 98765 43210"
+                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Used for SMS notifications (encrypted in storage)
+                </p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >GitHub Profile Link</label
+                >
+                <input
+                  type="text"
+                  id="profileGithub"
+                  placeholder="https://github.com/octocat"
+                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+            </div>
+            <button
+              id="saveProfileBtn"
+              class="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
+            >
+              Save Profile
+            </button>
+            <span
+              id="profileSaveStatus"
+              class="ml-3 text-sm text-green-600 hidden"
+              >✅ Saved!</span
+            >
+          </div>
+
+          <!-- Required info alerts -->
+          <div id="profileAlerts" class="mt-4 max-w-2xl space-y-3"></div>
+        </div>
+
+        <!-- Section: Generate Report -->
+        <div id="section-report" class="content-section fade-in">
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Generate Report</h2>
+          <p class="text-gray-500 text-sm mb-6">
+            Create analytics and performance reports for your project
+          </p>
+          <div
+            class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-2xl"
+          >
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Report Type</label
+                >
+                <select
+                  id="reportType"
+                  class="w-full px-3 py-2 border rounded-lg text-sm"
+                >
+                  <option value="team-performance">Team Performance</option>
+                  <option value="sprint-summary">Sprint Summary</option>
+                  <option value="bug-analysis">Bug Analysis</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1"
+                    >From</label
+                  >
+                  <input
+                    type="date"
+                    id="reportFrom"
+                    class="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1"
+                    >To</label
+                  >
+                  <input
+                    type="date"
+                    id="reportTo"
+                    class="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <button
+              id="generateReportBtn"
+              class="mt-6 bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition"
+            >
+              📊 Generate Report
+            </button>
+            <p class="text-xs text-gray-400 mt-2">Report is generated using AI based on your Jira data. End date cannot be in the future.</p>
+            <div id="reportOutput" class="mt-6 hidden"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      let sessionData = null;
+      let projectKey = null;
+
+      // ===== INIT =====
+      document.addEventListener("DOMContentLoaded", async () => {
+        // Check URL params for Slack status
+        const urlParams = new URLSearchParams(window.location.search);
+        const slackJustConnected = urlParams.get("slack_connected") === "true";
+        if (slackJustConnected) {
+          showToast(
+            "✅ Slack workspace connected! Please enter your Slack User ID below.",
+          );
+          history.replaceState({}, "", "/dashboard");
+          // Switch to settings so user sees Slack ID prompt
+          setTimeout(() => switchSection("settings"), 400);
+        }
+        if (urlParams.get("slack_error")) {
+          showToast("❌ Slack error: " + urlParams.get("slack_error"), true);
+          history.replaceState({}, "", "/dashboard");
+        }
+
+        try {
+          const res = await axios.get("/api/session");
+          if (!res.data?.success) throw new Error("Session invalid");
+          sessionData = res.data.user;
+          projectKey = sessionData.jiraProjectKey;
+
+          // Update top nav
+          document.getElementById("topProjectKey").textContent = projectKey;
+          document.getElementById("topUserName").textContent =
+            sessionData.displayName || sessionData.email;
+          document.getElementById("topUserRole").textContent =
+            sessionData.isAdmin ? "Admin" : "Member";
+
+          // Profile fields
+          document.getElementById("profileName").value =
+            sessionData.displayName || "";
+          document.getElementById("profileEmail").value =
+            sessionData.email || "";
+          // Slack Member ID and phone are stored per-project (in projectMember)
+          if (sessionData.projectMember) {
+            document.getElementById("profileSlackId").value =
+              sessionData.projectMember.slackMemberId ||
+              sessionData.projectMember.slackUserId || ""; // backward compat
+            document.getElementById("profileMobile").value =
+              sessionData.projectMember.phoneNumber || "";
+          }
+          // GitHub account ID stored globally
+          if (sessionData.profile?.contact) {
+            document.getElementById("profileGithub").value =
+              sessionData.profile.contact.githubAccountId ||
+              sessionData.profile.contact.githubUsername || "";
+          }
+
+          // Slack install links
+          const slackInstallUrl = `/slack/install?projectKey=${encodeURIComponent(projectKey)}`;
+          document.getElementById("slackInstallBtn").href = slackInstallUrl;
+          document.getElementById("slackReconnectBtn").href = slackInstallUrl;
+
+          // Wire sidebar navigation
+          document.querySelectorAll(".sidebar-link").forEach((link) => {
+            link.addEventListener("click", (e) => {
+              e.preventDefault();
+              switchSection(link.dataset.section);
+            });
+          });
+          document
+            .getElementById("backToWorkflowsBtn")
+            ?.addEventListener("click", () => switchSection("workflows"));
+          document
+            .getElementById("newWorkflowBtn")
+            ?.addEventListener("click", () => {
+              // Open AI chat for new workflow
+              const editBadge = document.getElementById('wf-edit-badge');
+              if (editBadge) editBadge.style.display = 'none';
+              switchSection("create");
+            });
+
+          // After Slack OAuth: show Slack ID prompt in settings
+          if (slackJustConnected) {
+            document
+              .getElementById("slackIdPrompt")
+              ?.classList.remove("hidden");
+          }
+          
+          if (!sessionData.isAdmin) {
+             document.querySelector('[data-section="workflows"]').style.display = 'none';
+             document.querySelector('[data-section="create"]').style.display = 'none';
+             document.querySelector('[data-section="settings"]').style.display = 'none';
+             document.querySelector('[data-section="report"]').style.display = 'none';
+             switchSection("bugsense");
+          } else {
+             // For admins, default is workflows (already active in HTML) unless slack was connected
+             if (!slackJustConnected) switchSection("workflows");
+          }
+
+          // Load data
+          if (sessionData.isAdmin) {
+             await Promise.all([loadSettings(), loadWorkflows()]);
+          }
+
+          // Show required-info alerts in profile section
+          showProfileAlerts();
+        } catch (err) {
+          console.error("Init failed:", err);
+          window.location.href = "/login";
+        }
+      });
+
+      // ===== LISTEN FOR MESSAGES FROM IFRAME =====
+      window.addEventListener("message", (e) => {
+        if (e.data?.type === "navigate") {
+          switchSection(e.data.section || "workflows");
+        }
+        if (e.data?.type === "workflowSaved") {
+          switchSection("workflows");
+          loadWorkflows();
+          loadSettings(); // refresh GitHub/Slack status in Settings
+          showToast("✅ Workflow saved successfully!");
+          // Also refresh session to get updated requiredContact
+          refreshSession();
+        }
+      });
+
+      // ===== REFRESH SESSION DATA (after workflow save/delete) =====
+      async function refreshSession() {
+        try {
+          const res = await axios.get("/api/session");
+          if (res.data?.success) {
+            sessionData = res.data.user;
+            showProfileAlerts();
+          }
+        } catch (e) {
+          /* ok */
+        }
+      }
+
+      // ===== SECTION NAVIGATION =====
+      function switchSection(section) {
+        document
+          .querySelectorAll(".content-section")
+          .forEach((s) => s.classList.remove("active"));
+        document
+          .querySelectorAll(".sidebar-link")
+          .forEach((l) => l.classList.remove("active"));
+        const sectionEl = document.getElementById(`section-${section}`);
+        const linkEl = document.querySelector(`[data-section="${section}"]`);
+        if (sectionEl) sectionEl.classList.add("active");
+        if (linkEl) linkEl.classList.add("active");
+
+        // Init AI chat when create section opens
+        if (section === 'create' && typeof WorkflowAIChat !== 'undefined' && projectKey) {
+          // Only init if not already initialized (chat messages exist)
+          const msgs = document.getElementById('wf-chat-messages');
+          if (!msgs || msgs.children.length === 0) {
+            WorkflowAIChat.init(projectKey);
+          }
+        }
+      }
+
+      // ===== LOAD WORKFLOWS =====
+      async function loadWorkflows() {
+        try {
+          const res = await axios.get("/api/workflows", {
+            headers: { "X-Project-Key": projectKey },
+          });
+          renderWorkflows(res.data?.data || []);
+        } catch (err) {
+          console.warn("Could not load workflows:", err.message);
+          renderWorkflows([]);
+        }
+      }
+
+      function renderWorkflows(workflows) {
+        const container = document.getElementById("workflowsList");
+        if (!workflows.length) {
+          container.innerHTML = `
+          <div class="text-center text-gray-400 py-16">
+            <p class="text-5xl mb-4">📬</p>
+            <p class="font-semibold text-gray-600 text-lg">No active workflows yet</p>
+            <p class="text-sm mt-2 mb-6">Create your first workflow to start automating Jira notifications.</p>
+            <button id="createFirstBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow transition">+ Create First Workflow</button>
+          </div>`;
+          document
+            .getElementById("createFirstBtn")
+            ?.addEventListener("click", () => {
+              switchSection("create");
+            });
+          return;
+        }
+
+        const eventLabels = {
+          issue_created: { icon: "🔖", text: "a new issue is created" },
+          issue_assigned: {
+            icon: "👤",
+            text: "an issue is assigned to someone",
+          },
+          issue_transitioned: { icon: "🔄", text: "an issue changes status" },
+          issue_commented: { icon: "💬", text: "a comment is added" },
+          issue_updated: { icon: "✏️", text: "an issue field is modified" },
+        };
+
+        container.innerHTML = workflows
+          .map((w) => {
+            const events = w.trigger?.events || [];
+            const notifs = w.notifications || {};
+            const enh = w.enhancements || {};
+
+            const date = w.createdAt?._seconds
+              ? new Date(w.createdAt._seconds * 1000).toLocaleDateString(
+                  "en-GB",
+                  { day: "numeric", month: "short", year: "numeric" },
+                )
+              : w.createdAt
+                ? new Date(w.createdAt).toLocaleDateString()
+                : "Unknown";
+
+            // Build natural-language trigger sentence
+            const triggerParts = events.map((ev) => {
+              const lbl = eventLabels[ev];
+              return lbl
+                ? `${lbl.icon} <span class="font-medium text-gray-900">${lbl.text}</span>`
+                : ev;
+            });
+            const triggerSentence =
+              triggerParts.length > 1
+                ? triggerParts.slice(0, -1).join(", ") +
+                  " or " +
+                  triggerParts.slice(-1)
+                : triggerParts[0] || "—";
+
+            // Build action steps
+            const actions = [];
+            for (const [ev, cfg] of Object.entries(notifs)) {
+              if (!cfg.enabled) continue;
+              if (ev === "issue_assigned") {
+                if (cfg.slack?.enabled)
+                  actions.push(`💬 Slack DM to assignee (all priorities)`);
+                if (cfg.slack?.channelId)
+                  actions.push(`📂 Post to team Slack channel`);
+                if (cfg.email?.enabled) {
+                  const ps = Object.entries(cfg.email.priorities || {})
+                    .filter(([, v]) => v)
+                    .map(([k]) => k);
+                  actions.push(
+                    `📧 Email to assignee${ps.length ? " (" + ps.join(", ") + " priority)" : ""}`,
+                  );
+                }
+                if (cfg.sms?.enabled) {
+                  const ps = Object.entries(cfg.sms.priorities || {})
+                    .filter(([, v]) => v)
+                    .map(([k]) => k);
+                  actions.push(
+                    `📱 SMS to assignee${ps.length ? " (" + ps.join(", ") + " priority)" : ""}`,
+                  );
+                }
+              } else if (cfg.channelId || cfg.channelName) {
+                actions.push(`📊 Post to #${cfg.channelName || cfg.channelId}`);
+              }
+            }
+            if (enh.autoBranch?.enabled)
+              actions.push("🌿 Auto-create GitHub branch");
+            if (enh.aiSolutions) actions.push("💡 Include AI fix suggestions");
+
+            const actionHTML = actions.length
+              ? actions
+                  .map(
+                    (a, i) => `
+              <div class="flex items-center gap-2 text-sm">
+                ${i > 0 ? '<div class="w-px h-3 bg-gray-300 ml-3 mb-0.5"></div>' : ""}
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
+                  <span class="text-gray-700">${a}</span>
+                </div>
+              </div>`,
+                  )
+                  .join("")
+              : '<p class="text-xs text-gray-400">No active notification actions configured.</p>';
+
+            const versionBadge =
+              w.version > 1
+                ? `<span class="text-xs text-gray-400">v${w.version}</span>`
+                : "";
+
+            // Escape for safe embedding in onclick
+            const safeId = w.id;
+            const safeName = (w.name || "Workflow")
+              .replace(/'/g, "\\'")
+              .replace(/"/g, "&quot;");
+
+            // Show "Use Workflow" only if user can assign AND is NOT admin
+            const useWorkflowBtn = (sessionData?.canAssign && !sessionData?.isAdmin)
+              ? `<button data-wf-id="${safeId}" data-wf-project="${projectKey}" class="use-wf-btn px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 border border-indigo-600 rounded-lg transition">▶ Use Workflow</button>`
+              : '';
+
+            return `
+          <div class="workflow-card bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+            <!-- Header row -->
+            <div class="flex items-start justify-between mb-4">
+              <div class="flex-1 min-w-0 mr-4">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${w.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}">&#x25cf; ${w.isActive ? "Active" : "Inactive"}</span>
+                  ${versionBadge}
+                </div>
+                <h3 class="font-semibold text-gray-900 mt-1 text-base truncate">${w.name || "Untitled Workflow"}</h3>
+                <p class="text-xs text-gray-400 mt-0.5">Created ${date}${w.createdBy?.displayName ? " by " + w.createdBy.displayName : ""}</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                ${useWorkflowBtn}
+                <button data-edit-id="${safeId}" data-edit-name="${safeName}" class="edit-wf-btn px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition">✏️ Edit</button>
+                <button data-delete-id="${safeId}" data-delete-name="${safeName}" class="delete-wf-btn px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition">🗑 Delete</button>
+              </div>
+            </div>
+
+            <!-- Flow diagram -->
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <!-- TRIGGER -->
+              <div class="flex items-start gap-3 mb-3">
+                <div class="mt-0.5 w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">IF</div>
+                <div>
+                  <p class="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Trigger</p>
+                  <p class="text-sm text-gray-700">When ${triggerSentence} in <strong>${projectKey}</strong></p>
+                </div>
+              </div>
+
+              <!-- Arrow -->
+              <div class="flex items-center gap-2 mb-3 ml-4">
+                <div class="w-0.5 h-4 bg-gray-300"></div>
+                <div class="text-gray-400 text-xs font-bold tracking-widest">THEN</div>
+              </div>
+
+              <!-- ACTIONS -->
+              <div class="flex items-start gap-3">
+                <div class="mt-0.5 w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">🔔</div>
+                <div class="flex-1">
+                  <p class="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1.5">Actions</p>
+                  <div class="space-y-1">${actionHTML}</div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+          })
+          .join("");
+
+        // Wire edit and delete buttons using event delegation
+        container.querySelectorAll(".use-wf-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const project = btn.dataset.wfProject || projectKey;
+            window.location.href = `/bugsense?project=${encodeURIComponent(project)}`;
+          });
+        });
+
+        container.querySelectorAll(".edit-wf-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            editWorkflow(btn.dataset.editId, btn.dataset.editName);
+          });
+        });
+        container.querySelectorAll(".delete-wf-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            deleteWorkflow(btn.dataset.deleteId, btn.dataset.deleteName);
+          });
+        });
+      }
+
+      // ===== EDIT WORKFLOW — open AI chat in edit mode =====
+      async function editWorkflow(workflowId, workflowName) {
+        try {
+          // Fetch the full workflow data
+          const wfRes = await axios.get(`/api/workflows/${workflowId}`, {
+            headers: { "X-Project-Key": projectKey },
+          });
+          const workflowData = wfRes.data?.data;
+          if (!workflowData) throw new Error("Could not load workflow data");
+
+          // Show edit badge
+          const editBadge = document.getElementById('wf-edit-badge');
+          if (editBadge) {
+            editBadge.textContent = `✏️ Editing: ${workflowName}`;
+            editBadge.style.display = 'inline';
+          }
+
+          // Switch to create section FIRST (renders the shell)
+          switchSection("create");
+
+          // Then init AI chat in edit mode (after section is visible)
+          if (typeof WorkflowAIChat !== 'undefined' && projectKey) {
+            await WorkflowAIChat.initEdit(projectKey, workflowId, workflowName, workflowData);
+          }
+
+          showToast(`✏️ Editing "${workflowName}" via AI chat`);
+        } catch (err) {
+          showToast("Could not start edit: " + (err.response?.data?.error || err.message), true);
+        }
+      }
+
+      // ===== DELETE WORKFLOW =====
+      function deleteWorkflow(workflowId, workflowName) {
+        if (
+          !confirm(
+            `Delete the workflow "${workflowName}"?\n\nThis will deactivate it and stop all associated notifications.`,
+          )
+        )
+          return;
+        axios
+          .delete(`/api/workflows/${workflowId}`, {
+            headers: { "X-Project-Key": projectKey },
+          })
+          .then(() => {
+            showToast(`🗑 Workflow deleted.`);
+            loadWorkflows();
+            loadSettings(); // refresh integrations display
+            refreshSession();
+          })
+          .catch((err) =>
+            alert(
+              "Could not delete: " + (err.response?.data?.error || err.message),
+            ),
+          );
+      }
+
+      // ===== LOAD SETTINGS =====
+      async function loadSettings() {
+        // Load features
+        try {
+          const featRes = await axios.get("/api/admin/projects/features", {
+            headers: { "X-Project-Key": projectKey },
+          });
+          if (featRes.data?.success && featRes.data.features) {
+            const f = featRes.data.features;
+            document.getElementById("settingsAiAssignee").checked =
+              f.aiAssigneeSuggestions || false;
+            document.getElementById("settingsReportGen").checked =
+              f.reportGeneration || false;
+            if (f.reportGeneration) {
+              document
+                .getElementById("reportNavLink")
+                .classList.remove("hidden");
+            }
+
+            // Sentry status
+            const webhookUrl = `${window.location.origin}/webhooks/sentry/${projectKey}`;
+            document.getElementById("sentryWebhookUrl").textContent =
+              webhookUrl;
+            if (f.sentryEnabled) {
+              document.getElementById("settingsSentry").checked = true;
+              document.getElementById("settingsSentry").disabled = true;
+              document.getElementById("sentrySetup").classList.add("hidden");
+              document
+                .getElementById("sentryActive")
+                .classList.remove("hidden");
+              document.getElementById("sentryActiveUrl").textContent =
+                webhookUrl;
+            }
+          } else {
+            // First time — just set the webhook URL
+            const webhookUrl = `${window.location.origin}/webhooks/sentry/${projectKey}`;
+            document.getElementById("sentryWebhookUrl").textContent =
+              webhookUrl;
+          }
+        } catch (err) {
+          /* features may not exist yet */
+        }
+
+        // Check AI Solutions usage from active workflows
+        try {
+          const wfRes = await axios.get("/api/workflows", {
+            headers: { "X-Project-Key": projectKey },
+          });
+          const workflows = wfRes.data?.data || [];
+          const aiWf = workflows.find(
+            (w) => w.isActive && w.enhancements?.aiSolutions,
+          );
+          if (aiWf) {
+            document.getElementById("settingsAiSolStatus").checked = true;
+            document
+              .getElementById("aiSolStatusActive")
+              .classList.remove("hidden");
+            document
+              .getElementById("aiSolStatusInactive")
+              .classList.add("hidden");
+            document.getElementById("aiSolWorkflowName").textContent =
+              aiWf.name || "Untitled Workflow";
+          } else {
+            document.getElementById("settingsAiSolStatus").checked = false;
+            document
+              .getElementById("aiSolStatusActive")
+              .classList.add("hidden");
+            document
+              .getElementById("aiSolStatusInactive")
+              .classList.remove("hidden");
+          }
+        } catch (e) {
+          /* ok */
+        }
+
+        // Load integrations (Slack + GitHub)
+        try {
+          const intRes = await axios.get("/api/admin/integrations", {
+            headers: { "X-Project-Key": projectKey },
+          });
+          if (intRes.data?.slack?.teamId) {
+            document
+              .getElementById("slackNotConnected")
+              .classList.add("hidden");
+            document
+              .getElementById("slackConnected")
+              .classList.remove("hidden");
+            document.getElementById("slackTeamName").textContent =
+              intRes.data.slack.teamName || "Workspace";
+            // Fetch live channel count
+            try {
+              const chRes = await axios.get(
+                "/api/admin/integrations/slack/channels",
+                {
+                  headers: { "X-Project-Key": projectKey },
+                },
+              );
+              if (chRes.data?.channels) {
+                document.getElementById("slackChannelCount").textContent =
+                  chRes.data.channels.length;
+              }
+            } catch (e) {
+              document.getElementById("slackChannelCount").textContent =
+                intRes.data.slack.confirmedChannels?.length || "?";
+            }
+            // Show Slack ID prompt if user hasn't set it for this project
+            const hasSlackId = !!(sessionData?.projectMember?.slackMemberId || sessionData?.projectMember?.slackUserId);
+            if (!hasSlackId) {
+              document
+                .getElementById("slackIdPrompt")
+                ?.classList.remove("hidden");
+            }
+          } else {
+            document
+              .getElementById("slackNotConnected")
+              .classList.remove("hidden");
+            document.getElementById("slackConnected").classList.add("hidden");
+          }
+          if (intRes.data?.github?.repoUrl) {
+            // Show connected state
+            document
+              .getElementById("githubNotConnected")
+              .classList.add("hidden");
+            document
+              .getElementById("githubConnected")
+              .classList.remove("hidden");
+            document.getElementById("githubRepoLink").textContent =
+              intRes.data.github.repoUrl;
+            document.getElementById("githubRepoLink").href =
+              intRes.data.github.repoUrl;
+          } else {
+            document
+              .getElementById("githubNotConnected")
+              .classList.remove("hidden");
+            document.getElementById("githubConnected").classList.add("hidden");
+          }
+        } catch (err) {
+          /* integrations may not exist */
+        }
+
+        // Wire Slack ID save button after connect
+        document
+          .getElementById("saveSlackIdAfterConnect")
+          ?.addEventListener("click", async () => {
+            const val = document
+              .getElementById("slackIdAfterConnect")
+              .value.trim();
+            if (!val) {
+              alert("Please enter your Slack User ID (e.g. U12345678)");
+              return;
+            }
+            if (!val.startsWith("U")) {
+              alert(
+                "Slack Member ID must start with 'U'. Please copy it from Slack: click your name → ⋯ → View full profile → ⋯ near View As → Copy Member ID",
+              );
+              return;
+            }
+            try {
+              await axios.put(
+                "/api/admin/members/contact",
+                { slackMemberId: val },
+                {
+                  headers: { "X-Project-Key": projectKey },
+                },
+              );
+              document
+                .getElementById("slackIdSaveMsg")
+                .classList.remove("hidden");
+              document.getElementById("profileSlackId").value = val; // Also update profile view
+              // Update session in memory
+              if (sessionData) {
+                sessionData.projectMember = sessionData.projectMember || {};
+                sessionData.projectMember.slackMemberId = val;
+              }
+              setTimeout(
+                () =>
+                  document
+                    .getElementById("slackIdPrompt")
+                    ?.classList.add("hidden"),
+                2000,
+              );
+            } catch (e) {
+              alert("Failed to save Slack ID: " + e.message);
+            }
+          });
+      }
+
+      // ===== SHOW PROFILE ALERTS (required Slack ID, mobile, GitHub based on workflows) =====
+      function showProfileAlerts() {
+        const alertsDiv = document.getElementById("profileAlerts");
+        if (!alertsDiv || !sessionData) return;
+        alertsDiv.innerHTML = "";
+
+        const rc = sessionData.requiredContact || {};
+        const member = sessionData.projectMember || {};
+
+        if (rc.slackRequired && !(member.slackMemberId || member.slackUserId)) {
+          alertsDiv.innerHTML += `
+          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            ⚠️ <strong>Slack Member ID required</strong> — One or more workflows use Slack notifications. Please enter your Slack Member ID above to receive messages.
+          </div>`;
+        }
+        if (rc.smsRequired && !member.phoneNumber) {
+          alertsDiv.innerHTML += `
+          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            ⚠️ <strong>Mobile number required</strong> — One or more workflows use SMS notifications. Please enter your mobile number above.
+          </div>`;
+        }
+        // GitHub required if any workflow has autoBranch enabled
+        if (
+          rc.githubRequired &&
+          !(
+            sessionData.profile?.contact?.githubAccountId ||
+            sessionData.profile?.contact?.githubUsername
+          )
+        ) {
+          alertsDiv.innerHTML += `
+          <div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            ⚠️ <strong>GitHub account required</strong> — Auto-branch creation is enabled in a workflow. Please enter your GitHub username above.
+          </div>`;
+        }
+      }
+
+      // ===== SAVE FEATURES (only the 2 clickable ones) =====
+      document
+        .getElementById("saveFeaturesBtn")
+        ?.addEventListener("click", async () => {
+          const features = {
+            aiAssigneeSuggestions:
+              document.getElementById("settingsAiAssignee").checked,
+            reportGeneration:
+              document.getElementById("settingsReportGen").checked,
+            // Preserve sentryEnabled — don't overwrite it
+            sentryEnabled:
+              document.getElementById("settingsSentry").checked &&
+              !document
+                .getElementById("sentrySetup")
+                .classList.contains("hidden")
+                ? false
+                : document.getElementById("settingsSentry").checked,
+          };
+          try {
+            await axios.put("/api/admin/projects/features", features, {
+              headers: { "X-Project-Key": projectKey },
+            });
+            if (features.reportGeneration) {
+              document
+                .getElementById("reportNavLink")
+                .classList.remove("hidden");
+            } else {
+              document.getElementById("reportNavLink").classList.add("hidden");
+            }
+            showStatus("featuresSaveStatus");
+          } catch (err) {
+            alert("Failed to save: " + err.message);
+          }
+        });
+
+      // ===== SENTRY CHECKBOX → show/hide setup =====
+      document.getElementById("settingsSentry")?.addEventListener("change", (e) => {
+          const sentrySetup = document.getElementById("sentrySetup");
+          const sentryActive = document.getElementById("sentryActive");
+          if (!sentryActive.classList.contains("hidden")) return;
+          sentrySetup.classList.toggle("hidden", !e.target.checked);
+        });
+
+      // ===== SAVE SENTRY JIRA TOKEN =====
+      document.getElementById("saveSentryTokenBtn")?.addEventListener("click", async () => {
+        const token = document.getElementById("sentryJiraToken")?.value?.trim();
+        if (!token) { showToast("Please enter your Jira API token", true); return; }
+        try {
+          await axios.put("/api/admin/integrations/sentry", { jiraApiToken: token }, {
+            headers: { "X-Project-Key": projectKey },
+          });
+          document.getElementById("sentryTokenSaved")?.classList.remove("hidden");
+          showToast("✅ Jira API token saved");
+        } catch (e) { showToast("Failed to save token: " + e.message, true); }
+      });
+
+      // ===== COPY SENTRY URL =====
+      document
+        .getElementById("copySentryUrl")
+        ?.addEventListener("click", () => {
+          const url = document.getElementById("sentryWebhookUrl").textContent;
+          navigator.clipboard
+            .writeText(url)
+            .then(() => showToast("📋 Webhook URL copied!"));
+        });
+
+      // ===== SENTRY DONE BUTTON → activate integration =====
+      document
+        .getElementById("sentryDoneBtn")
+        ?.addEventListener("click", async () => {
+          try {
+            const features = {
+              aiAssigneeSuggestions:
+                document.getElementById("settingsAiAssignee").checked,
+              reportGeneration:
+                document.getElementById("settingsReportGen").checked,
+              sentryEnabled: true,
+            };
+            await axios.put("/api/admin/projects/features", features, {
+              headers: { "X-Project-Key": projectKey },
+            });
+            // Update UI to show active state
+            document.getElementById("settingsSentry").disabled = true;
+            document.getElementById("sentrySetup").classList.add("hidden");
+            document.getElementById("sentryActive").classList.remove("hidden");
+            const webhookUrl = `${window.location.origin}/webhooks/sentry/${projectKey}`;
+            document.getElementById("sentryActiveUrl").textContent = webhookUrl;
+            showToast("✅ Sentry integration activated!");
+          } catch (err) {
+            alert("Failed to activate Sentry: " + err.message);
+          }
+        });
+
+      // ===== SAVE GITHUB =====
+      document
+        .getElementById("saveGithubBtn")
+        ?.addEventListener("click", async () => {
+          const repoUrl = document
+            .getElementById("settingsGithubRepo")
+            .value.trim();
+          if (!repoUrl) {
+            alert("Please enter a GitHub repository URL.");
+            return;
+          }
+          try {
+            await axios.put(
+              "/api/admin/integrations/github",
+              { repoUrl },
+              {
+                headers: { "X-Project-Key": projectKey },
+              },
+            );
+            // Switch to connected display
+            document
+              .getElementById("githubNotConnected")
+              .classList.add("hidden");
+            document
+              .getElementById("githubConnected")
+              .classList.remove("hidden");
+            document.getElementById("githubRepoLink").textContent = repoUrl;
+            document.getElementById("githubRepoLink").href = repoUrl;
+            showToast("✅ GitHub repository saved!");
+          } catch (err) {
+            alert("Failed to save: " + err.message);
+          }
+        });
+
+      // ===== CHANGE GITHUB (switch back to input mode) =====
+      document
+        .getElementById("changeGithubBtn")
+        ?.addEventListener("click", () => {
+          document.getElementById("githubConnected").classList.add("hidden");
+          document
+            .getElementById("githubNotConnected")
+            .classList.remove("hidden");
+          document.getElementById("settingsGithubRepo").value =
+            document.getElementById("githubRepoLink").textContent || "";
+          document.getElementById("settingsGithubRepo").focus();
+        });
+
+      // ===== SAVE PROFILE =====
+      document
+        .getElementById("saveProfileBtn")
+        ?.addEventListener("click", async () => {
+          const slackId = document
+            .getElementById("profileSlackId")
+            .value.trim();
+          if (slackId && !slackId.startsWith("U")) {
+            alert(
+              "Slack Member ID must start with 'U'.\n\nTo find it: click your name in Slack → ⋯ → View full profile → ⋯ near View As → Copy Member ID",
+            );
+            return;
+          }
+          try {
+            // Slack Member ID and phone are per-project
+            await axios.put(
+              "/api/admin/members/contact",
+              {
+                slackMemberId: slackId || null,
+                phoneNumber:
+                  document.getElementById("profileMobile").value.trim() || null,
+              },
+              { headers: { "X-Project-Key": projectKey } },
+            );
+            // Save GitHub account ID globally
+            const githubVal = document.getElementById("profileGithub").value.trim();
+            await axios.put(
+              "/api/admin/profile",
+              { githubAccountId: githubVal || null },
+              { headers: { "X-Project-Key": projectKey } },
+            );
+            showStatus("profileSaveStatus");
+            // Update local session
+            if (sessionData?.projectMember) {
+              sessionData.projectMember.slackMemberId = slackId || null;
+              sessionData.projectMember.phoneNumber =
+                document.getElementById("profileMobile").value.trim() || null;
+            }
+            showProfileAlerts();
+          } catch (err) {
+            alert("Failed to save: " + err.message);
+          }
+        });
+
+      // ===== GENERATE REPORT =====
+      document.getElementById("generateReportBtn")?.addEventListener("click", async () => {
+        const from = document.getElementById("reportFrom").value;
+        const to = document.getElementById("reportTo").value;
+        const reportType = document.getElementById("reportType").value;
+        const output = document.getElementById("reportOutput");
+
+        // Validation
+        if (!from || !to) { showToast("Please select both start and end dates", true); return; }
+        const today = new Date().toISOString().split('T')[0];
+        if (to > today) { showToast("End date cannot be in the future", true); return; }
+        if (from > to) { showToast("Start date must be before end date", true); return; }
+        const diffDays = (new Date(to) - new Date(from)) / (1000 * 60 * 60 * 24);
+        if (diffDays > 365) { showToast("Date range cannot exceed 1 year", true); return; }
+
+        const btn = document.getElementById("generateReportBtn");
+        btn.disabled = true;
+        btn.textContent = "⏳ Generating with AI...";
+        output.classList.add("hidden");
+
+        try {
+          const editNotes = document.getElementById("reportEditNotes")?.value || '';
+          const res = await axios.post("/api/features/reports/generate",
+            { reportType, from, to, editNotes },
+            { headers: { "X-Project-Key": projectKey } }
+          );
+
+          const { html, dataSummary, reportId } = res.data;
+          output.classList.remove("hidden");
+          output.innerHTML = `
+            <div class="border border-gray-200 rounded-xl overflow-hidden">
+              <!-- Toolbar -->
+              <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-semibold text-gray-700">📊 ${reportType.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
+                  <span class="text-xs text-gray-400">${from} → ${to}</span>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="downloadReportPDF()" class="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">⬇ Download PDF</button>
+                  <button onclick="printReport()" class="px-3 py-1.5 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition">🖨 Print</button>
+                  <button onclick="toggleEditNotes()" class="px-3 py-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition">✏️ Edit / Add Notes</button>
+                </div>
+              </div>
+              <!-- Edit notes panel -->
+              <div id="editNotesPanel" class="hidden px-4 py-3 bg-amber-50 border-b border-amber-200">
+                <label class="block text-xs font-medium text-amber-800 mb-1">Add notes or edit instructions (will regenerate report):</label>
+                <textarea id="reportEditNotes" rows="3" placeholder="e.g. Add a section on team morale, highlight the top performer, change the tone to be more formal..."
+                  class="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400"></textarea>
+                <button onclick="regenerateReport()" class="mt-2 px-4 py-1.5 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition">🔄 Regenerate with Notes</button>
+              </div>
+              <!-- Report content -->
+              <div id="reportContent" class="p-6 bg-white max-h-[600px] overflow-y-auto">
+                ${html}
+              </div>
+            </div>`;
+
+          // Store for regeneration
+          window._lastReport = { reportType, from, to };
+
+        } catch (err) {
+          const msg = err.response?.data?.error || err.message;
+          showToast("Report failed: " + msg, true);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "📊 Generate Report";
+        }
+      });
+
+      function toggleEditNotes() {
+        const panel = document.getElementById("editNotesPanel");
+        panel?.classList.toggle("hidden");
+      }
+
+      async function regenerateReport() {
+        if (!window._lastReport) return;
+        const { reportType, from, to } = window._lastReport;
+        const editNotes = document.getElementById("reportEditNotes")?.value || '';
+        document.getElementById("generateReportBtn").click();
+      }
+
+      function downloadReportPDF() {
+        const content = document.getElementById("reportContent");
+        if (!content) return;
+        const win = window.open('', '_blank');
+        win.document.write(`<!DOCTYPE html><html><head><title>Report</title>
+          <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
+          </head><body>${content.innerHTML}
+          <script>window.onload=()=>{window.print();}<\/script></body></html>`);
+        win.document.close();
+      }
+
+      function printReport() { downloadReportPDF(); }
+
+      // ===== HELPERS =====
+      function showStatus(id) {
+        const el = document.getElementById(id);
+        el.classList.remove("hidden");
+        setTimeout(() => el.classList.add("hidden"), 3000);
+      }
+
+      function showToast(msg, isError = false) {
+        const toast = document.createElement("div");
+        toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all ${isError ? "bg-red-600 text-white" : "bg-green-600 text-white"}`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }
+    </script>
+    <script src="/ai-workflow-chat.js"></script>
+  </body>
+</html>
