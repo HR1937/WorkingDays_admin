@@ -253,7 +253,7 @@ PORT=3000
 ```
 
 ```bash
-node app.js
+npm run dev
 ```
 
 Expose your local server via ngrok or similar to receive Jira webhooks:
