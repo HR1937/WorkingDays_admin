@@ -156,28 +156,64 @@ Duplicate trigger prevention ensures no two active workflows share the same trig
 
 ```
 /
-├── routes/
-│   ├── auth.js          — Jira OAuth flow
-│   ├── webhooks.js      — Jira + Sentry webhook handlers
-│   ├── workflows.js     — CRUD for workflows
-│   ├── notify.js        — Notification dispatch
-│   └── issue.js         — Issue creation + analysis
-├── services/
-│   ├── ai-agent.js      — LangGraph agent graph
-│   ├── workflowExecutor.js — Execution engine
-│   ├── slackHelper.js
-│   ├── githubHelper.js
-│   └── smsHelper.js
-├── utils/
-│   ├── openai.js        — generateText + chatCompletion wrappers
-│   ├── encrypt.js       — AES-256 encrypt/decrypt
-│   └── firestore.js     — DB helpers
-├── public/
-│   ├── index.html       — Admin dashboard
-│   ├── bugsense.html    — Assigner dashboard
-│   └── ...
-├── app.js
-└── .env
+config/
+  firebase.js
+  github.js
+  jira.js
+  notifications.js
+  slack.js
+docs/
+  FIREBASE_SETUP.md
+middleware/
+  auth.js
+  webhookAuth.js
+public/
+  ai-workflow-chat.js
+  axios.min.js
+  bugsense.html
+  bugsense.js
+  dashboard.html
+  not-registered.html
+  workflow-builder.html
+routes/
+  features/
+    ai-analysis.js
+    reports.js
+  webhooks/
+    github.js
+    jira.js
+    sentry.js
+  admin.js
+  ai-chat.js
+  auth.js
+  bugsense.js
+  session.js
+  workflows.js
+services/
+  actionHandlers/
+    createGitHubBranch.js
+    sendEmail.js
+    sendSlackMessage.js
+    sendSMS.js
+  ai/
+    assigneeSuggester.js
+    bugAnalyzer.js
+  ai-agent.js
+  githubHelper.js
+  workflowEngine.js
+  workflowExecutor.js
+utils/
+  crypto.js
+  logger.js
+  openai.js
+  validator.js
+.gitignore
+app.js
+firestore.rules
+package.json
+README.md
+server.js
+test-firebase.js
 ```
 
 ---
